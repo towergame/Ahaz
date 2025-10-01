@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: be-testteam-service
+spec:
+  clusterIP: None
+  selector:
+    name: jwt-some-be
+  #ports:
+  #- protocol: TCP
+  #  port: 0
+  #  targetPort: 0
