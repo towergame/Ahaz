@@ -7,6 +7,7 @@ ahaz cicd (legacy name) - supports multi container tasks with custom network rul
 `CERT_DIR_HOST`= directory where users/teams vpn configs will be stored on the ahaz host machine
 
 `CERT_DIR_CONTAINER`= directory within the VPN container where the certificates will be located
+
 `DB_IP` = IP address of ahaz challenge/task db it contains templates for challenges,pods,pod networkpolicies, env vars etc. is used for starting challenges within ahaz
 `DB_DBNAME`,`DB_USERNAME`,`DB_PASSWORD` used for connecting to said db
 
