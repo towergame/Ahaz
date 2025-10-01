@@ -17,6 +17,8 @@ services:
       DB_USERNAME: "dbeaver"
       DB_PASSWORD: "dbeaver"
       PUBLIC_DOMAINNAME: "ctf.eztfsp.lv"
+      K8S_IP_RANGE: "10.42.0.0 255.255.0.0"
+      VERBOSE: "True"
     networks:
       ahaz_db_connection:
         ipv4_address: 10.33.0.2

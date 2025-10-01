@@ -1,7 +1,7 @@
 import pymysql
 from os import environ
 
-verbose=True
+verbose=environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 
 #serverIP="10.13.0.3"
 #databasename="ahaz"

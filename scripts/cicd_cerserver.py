@@ -6,7 +6,7 @@ import json
 from threading import Thread
 from os import path, environ 
 
-verbose = True
+verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 #certDirLocation="/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/"
 #certdirlocationContainer="/certdir/"
 certDirLocation=environ.get('CERT_DIR_HOST','/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/')
@@ -24,10 +24,11 @@ def team_get():
 @app.route('/start_challenge', methods=['POST','GET'])
 def start_challenge():    
     request_data_json = request.get_json()
-    print("1234567890")
-    print(request_data_json)
+    if (verbose): print("1234567890")
+    if (verbose): print(request_data_json)
     teamname=request_data_json["teamname"]
     challengename=request_data_json["challengename"]
+    print("--starting challenge ",end="")
     print(teamname,challengename)
     status = controller.start_challenge(teamname,challengename)
     if status == 0:
@@ -39,6 +40,7 @@ def stop_challenge():
     request_data_json = request.get_json()
     teamname=request_data_json["teamname"]
     challengename=request_data_json["challengename"]
+    print("--stopping challenge ",end="")
     print(teamname,challengename)
     status = controller.stop_challenge(teamname,challengename)
     return status        
@@ -65,15 +67,15 @@ def get_images():
 @app.route('/get_challenges',methods=['GET'])
 def get_challenges():
     get_challenges_json=dboperator.cicd_get_challenges_from_db()
-    print(get_challenges_json)
+    if (verbose): print(get_challenges_json)
     return str(get_challenges_json)
 @app.route('/get_pods_namespace', methods=['GET'])
 def get_pods_namespace():
     request_data_json = request.get_json()
-    print(request_data_json)
+    if (verbose): print(request_data_json)
     teamname=str(request_data_json["teamname"])
     podresult=controller.get_pods_namespace(teamname,0)
-    print(podresult)
+    if (verbose): print(podresult)
     return podresult
     
 @app.route('/add_user',methods=['POST'])
@@ -95,6 +97,8 @@ def adduser():
         if(verbose): print("about to insert config into db")
         dboperator.insert_user_vpn_config(teamname,username,config)
         if(verbose): print("successfully added a user to db")
+        print("-- Registered user (teamname, username )",end="")
+        print(teamname,username)
         return "successfully added a user to db"
     #except:
         #return "issues adding "+username
@@ -120,22 +124,22 @@ def team_post():
     port=-1
     protocol="tcp"
     try:
-        print(request_data_json["teamname"])
+        if (verbose): print(request_data_json["teamname"])
         teamname=request_data_json["teamname"]
     except:
         error+=" teamname"
     try:
-        print(request_data_json["domainname"])
+        if (verbose): print(request_data_json["domainname"])
         domainname=request_data_json["domainname"]
     except:
         error+=" domainname"
     try:
-        print(request_data_json["port"])
+        if (verbose): print(request_data_json["port"])
         port=int(request_data_json["port"])
     except:
         error+=" port"
     try:
-        print(request_data_json["protocol"])
+        if (verbose): print(request_data_json["protocol"])
         if(request_data_json["protocol"] != "tcp" and request_data_json["protocol"] != "udp"):
             return "protocol should be tcp or udp"
         else:
@@ -190,8 +194,12 @@ def team_post():
         #    print("something went wrong in the genteam function")
         #    #return "Something went wrong"
         Thread(target=gen_team_from_flask_for_subprocess, daemon=True).start()
+        print("started team creation as a thread ",end="")
+        print(teamname)
         return "Started team creation as a thread"
     else:
+        print("ERROR reigstering team ",end="")
+        print(error)
         return error
 
 @app.route('/gen_team_lazy',methods=['POST'])
@@ -213,25 +221,29 @@ def team_post_lazy():
                 t1 = Thread(generatecert.gen_team,[teamname,domainname,port,protocol,certDirLocation])
                 t1.start()
             except:
-                print("doing except")
+                if (verbose): print("doing except")
                 generatecert.gen_team(teamname,domainname,port,protocol,certDirLocation,certdirlocationContainer)
                 controller.create_team_namespace(teamname)
-                print("=8", end="")
+                if (verbose): print("=8", end="")
                 controller.create_team_vpn_container(teamname)
-                print("about to expose team vpn container")
+                if (verbose): print("about to expose team vpn container")
                 controller.expose_team_vpn_container(teamname,port)
-                print("=9", end="")
+                if (verbose): print("=9", end="")
                 dboperator.insert_team_into_db(teamname)
                 dboperator.insert_vpn_port_into_db(teamname,port)
+            print("Successfully registered a team",end="")
+            print(teamname)
             return "Successfuly made a team"
         except:
+            print("ERROR registering a team ",end="")
+            print(teamname)
             return "Something went wrong"
     Thread(target=team_post_lazy_subprocess, daemon=True).start()
     return "Started team creation as a thread"
 
 @app.route('/get_last_port',methods=['GET'])
 def get_last_port():
-    print("trying to run dboperator.get_last_port()")
+    if (verbose): print("trying to run dboperator.get_last_port()")
     return str(dboperator.get_last_port())
 if __name__ == "__main__":
     app.run(host="0.0.0.0")

@@ -4,6 +4,8 @@ from os import environ
 import docker
 import dboperator
 import time
+
+verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 #certDirLocation="/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/"
 certDirLocation=environ.get('CERT_DIR_HOST')
 #for minikube
@@ -62,9 +64,9 @@ def start_challenge(teamname,challengename):
         policy = create_network_policy(teamname)
         api = client.NetworkingV1Api()
         api_response = api.create_namespaced_network_policy(namespace=teamname, body=policy)
-        print("Successfully applied network policy")
+        if (verbose): print("Successfully applied network policy")
     except client.rest.ApiException as e:
-        print("Exception when applying network policy: %s\n" % e)
+        if (verbose): print("Exception when applying network policy: %s\n" % e)
     return "succeeded in creating a namespaced pod"
     #except:
     #    return str(Exception)

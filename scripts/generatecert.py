@@ -15,6 +15,8 @@ import tarfile
 import tempfile
 import yaml
 import controller
+import environ
+verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 logger = logging.getLogger(__name__)
 script_dir = path.dirname(path.realpath(__file__))
 tools_dir = path.abspath(path.join(script_dir, 'tools'))
@@ -395,7 +397,7 @@ exit 0
 ''')
 def gen_ta_key(directory):
     pkidirectory = directory+"/pki"
-    print("running openvpn --genkey --secret ta.key in "+pkidirectory)
+    if (verbose): print("running openvpn --genkey --secret ta.key in "+pkidirectory)
     subprocess.run("/usr/sbin/openvpn --genkey --secret ta.key",cwd=pkidirectory,shell=True)
 
 def gen_team(teamname, domainname, port, protocol,certdirlocation,certdirlocationContainer):
@@ -423,10 +425,10 @@ def gen_team(teamname, domainname, port, protocol,certdirlocation,certdirlocatio
 
 
 if __name__ == "__main__":
-    print("teamname: " + sys.argv[1])  #name of the team and the dir it will resid ein
-    print("domainname: "+ sys.argv[2])
-    print("port: "+str(sys.argv[3]))
-    print("protocol: "+ sys.argv[4])
+    if (verbose): print("teamname: " + sys.argv[1])  #name of the team and the dir it will resid ein
+    if (verbose): print("domainname: "+ sys.argv[2])
+    if (verbose): print("port: "+str(sys.argv[3]))
+    if (verbose): print("protocol: "+ sys.argv[4])
     myteamname=sys.argv[1]
     myteamdir="./" + sys.argv[1]
 
@@ -470,7 +472,7 @@ if __name__ == "__main__":
     gen_configs_ovpn(myteamdir,domainname,port,protocol)
     
     gen_ta_key(myteamdir)
-    print("exiting before the rest")
+    if (verbose): print("exiting before the rest")
     exit()
     # Create and missing openvpn config directories
     for name, chal in config['challenges'].items():

@@ -8,6 +8,7 @@ import cicd_dboperator
 import time
 import cicd_dboperator
 import json
+verbose =environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 
 def create_network_policy_deny_all(namespace):
 # Load kube config (for local development)
@@ -102,15 +103,15 @@ def start_challenge_pod(teamname,k8s_name,image,ram,cpu,storage,visible_to_user,
                 # 'imagePullSecrets': client.V1LocalObjectReference(name='regcred'), # together with a service-account, allows to access private repository docker image
             }
         }
-    print(pod_manifest)
+    if (verbose): print(pod_manifest)
     k8s_client.create_namespaced_pod(namespace=teamname,body=pod_manifest)
     create_pod_service(teamname, taskname, k8s_name)
 
 def start_challenge(teamname,challengename):
-    print(" a")
+    if (verbose): print(" a")
     db_pods_data = cicd_dboperator.cicd_get_pods(challengename)
     for i in db_pods_data:
-        print(i)
+        if (verbose): print(i)
         k8s_name,image,ram,cpu,visible_to_user=i[1:]
         # = 
         storage = "2Gb"
@@ -146,7 +147,7 @@ def get_pods_namespace(teamname,showInvisible):
                     state = 'Terminating'
                 else:
                     state = str(pod.status.phase) 
-                print("processing vpn container pod")
+                if (verbose): print("processing vpn container pod")
                 current_pod_info_json=('{"name":"'+pod.metadata.name
                 +'","status":"'+state
                 +'","ip":"'+pod.status.pod_ip
@@ -157,7 +158,7 @@ def get_pods_namespace(teamname,showInvisible):
                 else:
                     pod_info_json+=","+current_pod_info_json
                 continue
-            print("%s\t%s\t%s" % (pod.metadata.name,
+            if (verbose): print("%s\t%s\t%s" % (pod.metadata.name,
                                 pod.status.phase,
                                 pod.status.pod_ip))
             #because python k8s api does not show status terminating :/
@@ -172,7 +173,7 @@ def get_pods_namespace(teamname,showInvisible):
             +',"task":"'+cicd_dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
             +'","name":"'+pod.metadata.labels["name"]+'"'
             +'}')
-            print(current_pod_info_json)
+            if (verbose): print(current_pod_info_json)
             if(first):
                 if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
                     pod_info_json+=current_pod_info_json
@@ -191,7 +192,7 @@ def get_pods_namespace(teamname,showInvisible):
                     state = 'Terminating'
                 else:
                     state = str(pod.status.phase) 
-                print("processing vpn container pod")
+                if (verbose): print("processing vpn container pod")
                 current_pod_info_json=('{"name":"'+pod.metadata.name
                 +'","status":"'+state
                 +'","ip":"'+pod.status.pod_ip
@@ -202,7 +203,7 @@ def get_pods_namespace(teamname,showInvisible):
                 else:
                     pod_info_json+=","+current_pod_info_json
                 continue
-            print("%s\t%s\t%s" % (pod.metadata.name,
+            if (verbose): print("%s\t%s\t%s" % (pod.metadata.name,
                                 pod.status.phase,
                                 pod.status.pod_ip,))
             #because python k8s api does not show status terminating :/
@@ -218,7 +219,7 @@ def get_pods_namespace(teamname,showInvisible):
             +',"task":"'+cicd_dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
             +',"name":"'+pod.metadata.labels["name"]+'"'
             +'}')
-            print(current_pod_info_json)
+            if (verbose): print(current_pod_info_json)
             if(first):
                 if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
                     pod_info_json+=current_pod_info_json
@@ -261,7 +262,7 @@ def create_pod_service(teamname, taskname,k8s_name):
         namespace=teamname,
         body=service
     )
-    print("Service created. Status='%s'" % str(api_response.status))
+    if (verbose): print("Service created. Status='%s'" % str(api_response.status))
 
 def create_network_policy_deny_all_task(teamname,challengename):
     sanitized_challengename=challengename.replace(" ","-").lower()
@@ -381,8 +382,8 @@ def create_challenge_network_policies(teamname,challengename):
             network_pods.append("vpn-container-pod")
             netname=netname+'-'+''.join(char for char in challengename.lower())
             netname=netname.replace(' ','-')
-        print(network_pods)
-        print(i[0]+'-'+''.join(char for char in challengename.lower() if char.isalpha()))
+        if (verbose): print(network_pods)
+        if (verbose): print(i[0]+'-'+''.join(char for char in challengename.lower() if char.isalpha()))
         allow_policy=create_network_policy_allow_task(teamname,challengename,network_pods,netname)
         api_response = api.create_namespaced_network_policy(namespace=teamname, body=allow_policy)
 
@@ -399,7 +400,7 @@ def stop_challenge(teamname,task):
     try:
         pods = core_v1.list_namespaced_pod(namespace=teamname, label_selector=label_selector)
         for pod in pods.items:
-            print(f"Deleting Pod: {pod.metadata.name}")
+            if (verbose): print(f"Deleting Pod: {pod.metadata.name}")
             core_v1.delete_namespaced_pod(name=pod.metadata.name, namespace=teamname)
     except ApiException as e:
         print(f"Error deleting pods: {e}")
@@ -409,7 +410,7 @@ def stop_challenge(teamname,task):
     try:
         services = core_v1.list_namespaced_service(namespace=teamname, label_selector=label_selector)
         for svc in services.items:
-            print(f"Deleting Service: {svc.metadata.name}")
+            if (verbose): print(f"Deleting Service: {svc.metadata.name}")
             core_v1.delete_namespaced_service(name=svc.metadata.name, namespace=teamname)
     except ApiException as e:
         print(f"Error deleting services: {e}")
@@ -424,7 +425,7 @@ def stop_challenge(teamname,task):
     except ApiException as e:
         print(f"Error deleting network policies: {e}")
         return f"Error deleting network policies: {e}"
-    print(f"All resources with label task={task} deleted from namespace {teamname}")
+    if (verbose): print(f"All resources with label task={task} deleted from namespace {teamname}")
     return f"All resources with label task={task} deleted from namespace {teamname}"
 
 #old functions from old controller
@@ -492,7 +493,7 @@ def create_team_vpn_container(teamname):
     k8s_client.create_namespaced_pod(body=pod_manifest,namespace=teamname)
 
 def expose_team_vpn_container(teamname,externalport):
-    print("about to expose team vpn container")
+    if (verbose): print("about to expose team vpn container")
     k8s_client = client.CoreV1Api()
     service = client.V1Service(
         metadata=client.V1ObjectMeta(
@@ -514,22 +515,22 @@ def expose_team_vpn_container(teamname,externalport):
             namespace=teamname,  # Namespace where the service should be created
             body=service
         )
-        print("Service created. Status: '%s'" % str(api_response.status))
+        if (verbose): print("Service created. Status: '%s'" % str(api_response.status))
         try:
             #policy_deny= create_network_policy_deny_all(teamname)
-            print("a")
+            if (verbose): print("a")
             policy = create_network_policy(teamname)
-            print("a")
+            if (verbose): print("a")
             api = client.NetworkingV1Api()
-            print("a")
+            if (verbose): print("a")
             #api_response_deny_all = api.create_namespaced_network_policy(namespace=teamname, body=policy_deny)
             api_response = api.create_namespaced_network_policy(namespace=teamname, body=policy)
-            print("a")
-            print("Successfully applied network policy")
+            if (verbose): print("a")
+            if (verbose): print("Successfully applied network policy")
         except client.rest.ApiException as e:
-            print("Exception when applying network policy: %s\n" % e)
+            if (verbose): print("Exception when applying network policy: %s\n" % e)
     except client.rest.ApiException as e:
-        print("Exception when creating service: %s\n" % e)
+        if (verbose): print("Exception when creating service: %s\n" % e)
 def docker_register_user(teamname,username):
     client = docker.from_env()
     vpnDirLocation=certDirLocation+teamname
