@@ -15,7 +15,7 @@ ahaz cicd (legacy name) - supports multi container tasks with custom network rul
 
 `K8S_IP_RANGE` = used for IP route in .ovpn files, should be matching with the freely used IP range in your cluster or basicly, the IPs of pods started by ahaz.
 
-`VERBOSE` = "True" or "false" as a string, not as boolean, useful for when first setting up the ahaz, basicly shows random print statements of ahaz running functions. errors will still be printed, and some info, like registration of teams and registration of users will still be printed to terminal running the ahaz through docker-compose. 
+`VERBOSE` = "True" or "false" as a string, not as boolean, useful for when first setting up the ahaz, basicly shows random print statements of ahaz running functions. if set to false, errors will still be printed, and some info, like registration of teams and registration of users will still be printed to terminal running the ahaz through docker-compose. 
 
 2. add kubeconfig contents to test_kube/config such that ahaz will be able to communicate with the k8s cluster
 3. docker compose up 
