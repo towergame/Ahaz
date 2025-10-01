@@ -13,11 +13,11 @@ databasename=environ.get("DB_DBNAME","ahaz")
 user=environ.get("DB_USERNAME","dbeaver")
 password=environ.get("DB_PASSWORD","dbeaver")
 k8s_ip_range=environ.get("K8S_IP_RANGE","10.42.0.0 255.255.0.0")
-print("testtext")
-print(serverIP)
-print(databasename)
-print(user)
-print(password)
+#print("testtext")
+#print(serverIP)
+#print(databasename)
+#print(user)
+#print(password)
 
 
 def cicd_insert_challenge(name,ctfd_desc,ctfd_score,ctfd_type):
