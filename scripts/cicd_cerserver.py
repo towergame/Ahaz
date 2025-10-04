@@ -7,6 +7,7 @@ from threading import Thread
 from os import path, environ 
 
 verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
+if(verbose):print("verbose set to true")
 #certDirLocation="/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/"
 #certdirlocationContainer="/certdir/"
 certDirLocation=environ.get('CERT_DIR_HOST','/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/')
@@ -245,6 +246,23 @@ def team_post_lazy():
 def get_last_port():
     if (verbose): print("trying to run dboperator.get_last_port()")
     return str(dboperator.get_last_port())
+
+@app.route('/del_team',methods=['POST'])
+def del_team():
+    request_data_json = request.get_json()
+    request_data = json.dumps(request_data_json)
+    teamname = request_data_json["teamname"]
+    def del_team_subprocess():
+        if(verbose):str(teamname)+" called del_team_subprocess, about to delete namespace"
+        controller.delete_namespace(teamname)
+        if(verbose):str(teamname)+" namespace deleted, about to delete team VPN directory for team"
+        generatecert.del_team(teamname,certdirlocationContainer)
+        if(verbose):str(teamname)+" cert Directory deleted, about to remove entries of team from db"
+        dboperator.delete_team_and_vpn(teamname)
+        if(verbose):str(teamname)+" entries of team removed from db"
+    Thread(target=del_team_subprocess(),daemon=True).start()
+    return "Started a thread for deletion of team "+teamname
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0")
 #if __name__ == "__main__":

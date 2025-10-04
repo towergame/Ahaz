@@ -548,6 +548,36 @@ def docker_obtain_user_vpn_config(teamname,username):
     result=result[:len(result)-2]
     return result
         
+def delete_namespace(teamname,timeout=300,interval=5):
+    config.load_kube_config()
+    k8s_client = client.CoreV1Api()
+    try:
+        print(f"Deleting namespace: {teamname}")
+        k8s_client.delete_namespace(name=teamname)
+    except ApiException as e:
+        if e.status == 404:
+            print(f"Namespace {teamname} does not exist.")
+            return 0
+        else:
+            print(f"Error deleting namespace: {e}")
+            return 1
+        
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            k8s_client.read_namespace(name=teamname)
+            if(verbose): print(f"Namespace {teamname} still exists. waiting for interval {str(interval)}")
+        except ApiException as e:
+            if e.status == 404:
+                print(f"Namespace {teamname} successfully deleted.")
+                return 0
+            else:
+                print(f"Unexpected error while checking namespace: {e}")
+                return 1
+        time.sleep(interval)
+
+    print(f"Timeout: Namespace {teamname} not deleted after {timeout} seconds.")
+    return 1
 
 #useless functions that I am afraid to delete currently
 #def create_network_policy(teamname,challengename):

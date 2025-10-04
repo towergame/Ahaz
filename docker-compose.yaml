@@ -8,22 +8,22 @@ services:
       - "5000:5000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /root/ahaz_cicd_env_prod/certDirectory:/certdir
+      - /home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/:/certdir
     environment:
-      CERT_DIR_HOST: "/root/ahaz_cicd_env_prod/certDirectory/"
+      CERT_DIR_HOST: "/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/"
       CERT_DIR_CONTAINER: "/certdir/"
       DB_IP: "10.33.0.3"
       DB_DBNAME: "ahaz"
       DB_USERNAME: "dbeaver"
       DB_PASSWORD: "dbeaver"
-      PUBLIC_DOMAINNAME: "ctf.eztfsp.lv"
+      PUBLIC_DOMAINNAME: "192.168.1.106"
       K8S_IP_RANGE: "10.42.0.0 255.255.0.0"
       VERBOSE: "True"
     networks:
       ahaz_db_connection:
         ipv4_address: 10.33.0.2
-      db_connection:
-        ipv4_address: 10.13.0.5
+      #db_connection:
+      #  ipv4_address: 10.13.0.5
       default:
   #k8s_controller_page:
   #  depends_on:
@@ -66,7 +66,7 @@ networks:
     ipam:
       config:
           - subnet: "10.33.0.0/29"
-  db_connection:
-    name: db_connection
-    external: true
+  # db_connection:
+  #   name: db_connection
+  #   external: true
   default:

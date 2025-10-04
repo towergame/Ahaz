@@ -1,5 +1,6 @@
 import pymysql
 from os import environ
+import time
 
 verbose=environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 
@@ -8,7 +9,7 @@ verbose=environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 #user="dbeaver"
 #password="dbeaver"
 
-serverIP=environ.get("DB_IP","10.13.0.3")
+serverIP=environ.get("DB_IP","10.33.0.3")
 databasename=environ.get("DB_DBNAME","ahaz")
 user=environ.get("DB_USERNAME","dbeaver")
 password=environ.get("DB_PASSWORD","dbeaver")
@@ -310,7 +311,62 @@ def get_last_port():
         return rows[0][0]
     except:
         return 30100
-  
+    
+def delete_team_and_vpn(teamname, timeout = 300, interval = 5):
+    start_time = time.time()
+    conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+    cursor = conn.cursor()
+    cursor.execute("SELECT (teamID) FROM teams WHERE name='"+teamname+"'")
+    rows = cursor.fetchall()
+    teamID = str(rows[0][0])
+    print(rows[0][0])
+    teamIDExists=True
+    conn.close()
+    
+    while teamIDExists and time.time() - start_time < timeout:
+        conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM vpn_map WHERE teamID = "+teamID)
+            conn.commit()
+        except:
+            if(verbose):print("vpn_map alread deleted for teamID = "+teamID)
+        try:
+            cursor.execute("DELETE FROM vpn_storage WHERE teamID = "+teamID)
+            conn.commit()
+        except:
+            if(verbose):print("vpn_storage alread deleted for teamID = "+teamID)
+
+        conn.close()
+        conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM vpn_map WHERE teamID = "+teamID)
+        rows = cursor.fetchall()
+        if len(rows)==0:
+            cursor.execute("SELECT * FROM vpn_storage WHERE teamID = "+teamID)
+            rows = cursor.fetchall()
+            if len(rows)==0:
+                teamIDExists=False
+            else:
+                teamIDExists=True
+        else:
+            teamIDExists=True
+        conn.close()
+        time.sleep(interval)
+    if time.time() - start_time >= timeout: return "timeout reached"
+    teamIDExists=True
+    while teamIDExists and time.time() - start_time < timeout:
+        conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+        cursor = conn.cursor()    
+        cursor.execute("DELETE from teams WHERE teamID = "+teamID)
+        conn.commit()
+        cursor.execute("SELECT * FROM teams WHERE teamID = "+teamID)
+        rows = cursor.fetchall()
+        if len(rows)==0:
+            teamIDExists=False
+    if not teamIDExists: return 0
+    if time.time() - start_time >= timeout: return "timeout reached"
+    return "something wierd occurred, timeout wasn't reached, but teamID still exists in db"
     
 def printdb():
     conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)

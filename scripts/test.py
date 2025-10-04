@@ -50,11 +50,18 @@ from kubernetes import client, config
 #print(podresult)
 #podresult = cicd_controller.get_pods_namespace("testteam",1)
 #print(podresult)
-cicd_controller.stop_challenge("zxcabcdefgh","JWT test")
+#cicd_controller.stop_challenge("zxcabcdefgh","JWT test")
 #cicd_controller.start_challenge("zxcabcdefgh","JWT test")
 #cicd_cerserver.get_pods_namespace("testteam")
-teamname="testteam"
+#teamname="testteam"
+
+#cicd_dboperator.delete_team_and_vpn("2");
+#certdirlocationContainer=environ.get('CERT_DIR_CONTAINER','/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/')
+#generatecert.del_team("2",certdirlocationContainer)
+#cicd_controller.delete_namespace("2")
+#cicd_dboperator.delete_team_and_vpn("2")
 #policy = controller.create_network_policy(teamname)
 #api = client.NetworkingV1Api()
 #api_response_deny_all = api.create_namespaced_network_policy(namespace=teamname, body=policy_deny)
 #api_response = api.create_namespaced_network_policy(namespace=teamname, body=policy)
+generatecert.del_team("8","/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/")

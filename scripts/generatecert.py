@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from os import path, makedirs, chmod, listdir
+from os import path, makedirs, chmod, listdir, environ
+from shutil import rmtree
 from lazycert import LazyCert
 import argparse
 import io
@@ -15,7 +16,6 @@ import tarfile
 import tempfile
 import yaml
 import controller
-import environ
 verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 logger = logging.getLogger(__name__)
 script_dir = path.dirname(path.realpath(__file__))
@@ -421,6 +421,16 @@ def gen_team(teamname, domainname, port, protocol,certdirlocation,certdirlocatio
         return 0
     except:
         return 1
+def del_team(teamname,certdirlocationContainer):
+    try:
+        print("called del_team function")
+        teamdirContainer = certdirlocationContainer+teamname
+        print(teamdirContainer)
+        if verbose: print("about to delete team "+teamname+" VPN directory")
+        rmtree(teamdirContainer)
+        if verbose: print("deleted team "+teamname+"VPN directory")
+    except:
+        print("failed to delete container directory for team "+teamname)
 
 
 

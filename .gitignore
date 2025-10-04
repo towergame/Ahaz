@@ -1,1 +1,3 @@
-test_kube/config
+test_kube/*
+certDirectory/*
+mysqldb/mysqldb_volume/*
