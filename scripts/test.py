@@ -64,4 +64,7 @@ from kubernetes import client, config
 #api = client.NetworkingV1Api()
 #api_response_deny_all = api.create_namespaced_network_policy(namespace=teamname, body=policy_deny)
 #api_response = api.create_namespaced_network_policy(namespace=teamname, body=policy)
-generatecert.del_team("8","/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/")
+#generatecert.del_team("8","/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/")
+#cicd_dboperator.set_registration_progress_team("1","1",1)
+status=cicd_dboperator.get_registration_progress_user("13","13")
+print(status)

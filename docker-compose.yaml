@@ -19,6 +19,7 @@ services:
       PUBLIC_DOMAINNAME: "192.168.1.106"
       K8S_IP_RANGE: "10.42.0.0 255.255.0.0"
       VERBOSE: "True"
+      TEAM_PORT_RANGE_START: 31000
     networks:
       ahaz_db_connection:
         ipv4_address: 10.33.0.2

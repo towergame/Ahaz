@@ -6,10 +6,10 @@ from os import environ
 #user="dbeaver"
 #password="dbeaver"
 
-serverIP=environ.get("DB_IP")
-databasename=environ.get("DB_DBNAME")
-user=environ.get("DB_USERNAME")
-password=environ.get("DB_PASSWORD")
+serverIP=environ.get("DB_IP","10.33.0.3")
+databasename=environ.get("DB_DBNAME","ahaz")
+user=environ.get("DB_USERNAME","dbeaver")
+password=environ.get("DB_PASSWORD","dbeaver")
 k8s_ip_range=environ.get("K8S_IP_RANGE","10.42.0.0 255.255.0.0")
 print(serverIP)
 if(serverIP==None):

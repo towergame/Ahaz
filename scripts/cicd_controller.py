@@ -63,7 +63,7 @@ def create_network_policy(namespace):
 
 
 container_registry_creds_name='regcred'
-certDirLocation=environ.get('CERT_DIR_HOST','/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/')
+certDirLocation=environ.get('CERT_DIR_HOST','/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/')
 def start_challenge_pod(teamname,k8s_name,image,ram,cpu,storage,visible_to_user,networklist,taskname):
     config.load_kube_config()
     k8s_client = client.CoreV1Api()

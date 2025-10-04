@@ -1,7 +1,7 @@
 import pymysql
 from os import environ
 import time
-
+import datetime
 verbose=environ.get("VERBOSE","True").lower() in ('true', '1', 't')
 
 #serverIP="10.13.0.3"
@@ -19,7 +19,8 @@ k8s_ip_range=environ.get("K8S_IP_RANGE","10.42.0.0 255.255.0.0")
 #print(databasename)
 #print(user)
 #print(password)
-
+def getUTCasStr():
+    return str(int(datetime.datetime.now(datetime.timezone.utc).timestamp()*1000))
 
 def cicd_insert_challenge(name,ctfd_desc,ctfd_score,ctfd_type):
     try:
@@ -367,7 +368,43 @@ def delete_team_and_vpn(teamname, timeout = 300, interval = 5):
     if not teamIDExists: return 0
     if time.time() - start_time >= timeout: return "timeout reached"
     return "something wierd occurred, timeout wasn't reached, but teamID still exists in db"
-    
+
+def get_registration_progress_team(teamname):
+    conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+    cursor = conn.cursor()
+    #implement sanitization here
+    cursor.execute("SELECT (state) FROM register_status WHERE name='"+teamname+"' ORDER BY state DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    print(rows)
+    try:
+        print(rows[0][0])
+        return rows[0][0]
+    except:
+        return "null" 
+def get_registration_progress_user(teamname,username):
+    conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+    cursor = conn.cursor()
+    #implement sanitization here
+    cursor.execute("SELECT (state) FROM register_status WHERE name='"+teamname+"' and user='"+username+"' ORDER BY state DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    print(rows)
+    try:
+        print(rows[0][0])
+        return rows[0][0]
+    except:
+        return "null" 
+def set_registration_progress_team(teamname,username,status):
+    if (verbose):print("connecting to db")
+    conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
+    cursor = conn.cursor()
+    if (verbose):print("inserting registration progress data in db")
+    cursor.execute("INSERT INTO register_status(name,user,state,timestamp) VALUES ('"+teamname+"','"+username+"',"+str(status)+","+getUTCasStr()+");")
+    print("INSERT INTO register_status(name,user,state,timestamp) VALUES ('"+teamname+"','"+username+"',"+str(status)+","+getUTCasStr()+");")
+    conn.commit()
+    conn.close()
+
 def printdb():
     conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
     cursor = conn.cursor()
