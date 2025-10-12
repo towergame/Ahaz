@@ -323,7 +323,7 @@ def delete_team_and_vpn(teamname, timeout = 300, interval = 5):
     print(rows[0][0])
     teamIDExists=True
     conn.close()
-    
+    cursor.execute("DELETE from register_status WHERE name = '"+teamname+"'")
     while teamIDExists and time.time() - start_time < timeout:
         conn = pymysql.connect(host=serverIP,port=3306,user=user,passwd=password,database=databasename)
         cursor = conn.cursor()

@@ -150,18 +150,8 @@ def team_post():
     except:
         error+=" protocol"
     if(error == "please specify a"):
-        #certegen_result=generatecert.gen_team(teamname,domainname,port,protocol)
-        #gen_team_from_flask_for_subprocess
         def gen_team_from_flask_for_subprocess():
-            #var padot jobid, pēc kura dabon statusu.
             try:
-                #if(path.isdir(certDirLocation+teamname)):
-                #    return "team already exists"
-                #try:
-                #    t1 = Thread(generatecert.gen_team,[teamname,domainname,port,protocol,certDirLocation])
-                #    t1.start()
-
-                #except:
                 if(verbose): print("doing except")
                 generatecert.gen_team(teamname,domainname,port,protocol,certDirLocation,certdirlocationContainer)
                 controller.create_team_namespace(teamname)
@@ -175,27 +165,6 @@ def team_post():
                 return "Successfuly made a team"
             except:
                 return "Something went wrong"
-        #try:
-        #    #if(path.isdir(certDirLocation+teamname)):
-        #    #    return "team already exists"
-        #    #try:
-        #    #    t1 = Thread(generatecert.gen_team,[teamname,domainname,port,protocol,certDirLocation])
-        #    #    t1.start()
-        #    #except:
-        #    if(verbose): print("doing except")
-        #    generatecert.gen_team(teamname,domainname,port,protocol,certDirLocation,certdirlocationContainer)
-        #    controller.create_team_namespace(teamname)
-        #    if(verbose): print("=8", end="")
-        #    controller.create_team_vpn_container(teamname)
-        #    if(verbose): print("about to expose team vpn container")
-        #    controller.expose_team_vpn_container(teamname,port)
-        #    if(verbose): print("=9", end="")
-        #    dboperator.insert_team_into_db(teamname)
-        #    dboperator.insert_vpn_port_into_db(teamname,port)
-        #    #return "Successfuly made a team"
-        #except:
-        #    print("something went wrong in the genteam function")
-        #    #return "Something went wrong"
         Thread(target=gen_team_from_flask_for_subprocess, daemon=True).start()
         print("started team creation as a thread ",end="")
         print(teamname)
@@ -243,30 +212,31 @@ def team_post_lazy():
             return "Something went wrong"
     Thread(target=team_post_lazy_subprocess, daemon=True).start()
     return "Started team creation as a thread"
-@app.route('/autogenerate',methods=['POST'])
+@app.route('/autogenerate',methods=['POST','GET'])
 def autogenerate():
-    print(request.get_json())
+    if(verbose):print(request.get_json())
     request_data_json = request.get_json()
     request_data = json.dumps(request_data_json)
-    error="please specify a"
     domainname=public_domainname
     teamPortOffset_str=request_data_json["teamname"].replace("a","")#admin teams start with "a" and then contain the number
-    print(teamPortOffset_str)
+    if(verbose):print(teamPortOffset_str)
     teamPortOffset=int(teamPortOffset_str)
-    print(teamPortOffset)
+    if(verbose):print(teamPortOffset)
     port=TeamPortRangeStart+teamPortOffset # use start + teamID for port, so that no two teams have the same port
     protocol="tcp"
     teamname=request_data_json["teamname"]
     username=request_data_json["username"]
-    print(port)
-    print(teamname)
-    print(username)
+    if(verbose):print(port)
+    if(verbose):print(teamname)
+    if(verbose):print(username)
     #teamExists=dboperator.get_team_id(teamname)
     #if(teamExists != "null"):
     #    return "team already exists"
     def autogenerate_subprocess():
         try:
-            print(dboperator.get_registration_progress_team(teamname))
+            if dboperator.get_registration_progress_team(teamname) == 10:
+                return "team is being reregistered"
+            if(verbose):print(dboperator.get_registration_progress_team(teamname))
             if dboperator.get_registration_progress_team(teamname) == "null": #if no team has been registered, register it
                 dboperator.set_registration_progress_team(teamname,username,1)
                 if (verbose): print("started registration proces for a team")
@@ -298,8 +268,10 @@ def autogenerate():
             elif dboperator.get_registration_progress_team(teamname)>=6: # if team is already registered, then 
                 dboperator.set_registration_progress_team(teamname,username,6)
             teststatus=dboperator.get_registration_progress_user(teamname,username)
-            print(teststatus)
+            if(verbose):print(teststatus)
             sleep(2) # in case the docker container for ovpn file creation is still running and doing something
+            if dboperator.get_registration_progress_team(teamname) == 10:
+                return "team is being reregistered"
             if (dboperator.get_registration_progress_user(teamname,username)=="null") or (dboperator.get_registration_progress_user(teamname,username)==6): #if user isn't registered or this was the user that first called the team registration
                 if(verbose): print("about to register user in docker")
                 dboperator.set_registration_progress_team(teamname,username,7)
@@ -326,9 +298,98 @@ def autogenerate():
         Thread(target=autogenerate_subprocess, daemon=True).start()
         sleep(1)
         status_user = dboperator.get_registration_progress_user(teamname,username)
-        return "Started team and user creation as a thread, current progress "+str(status_user)
+        status_team = dboperator.get_registration_progress_team(teamname)
+        return '{ "message":"Started team and user creation as a thread","team_status":"'+str(status_team)+'", "user_status":"'+str(status_user)+'"}'
     status_team = dboperator.get_registration_progress_team(teamname)
-    return " team creation thread is already running, status for team:"+str(status_team)+" user:"+str(status_user)
+    return '{ "message":"team creation thread is already running", "team_status":"'+str(status_team)+'", "user_status":"'+str(status_user)+'"}'
+@app.route('/regenerate',methods=['POST'])
+def regenerate():
+    request_data_json = request.get_json()
+    domainname=public_domainname
+    teamPortOffset_str=request_data_json["teamname"].replace("a","")#admin teams start with "a" and then contain the number
+    if(verbose):print(teamPortOffset_str)
+    teamPortOffset=int(teamPortOffset_str)
+    if(verbose):print(teamPortOffset)
+    port=TeamPortRangeStart+teamPortOffset # use start + teamID for port, so that no two teams have the same port
+    protocol="tcp"
+    teamname=request_data_json["teamname"]
+    username=request_data_json["username"]
+    if(verbose):print(port)
+    if(verbose):print(teamname)
+    if(verbose):print(username)
+    #teamExists=dboperator.get_team_id(teamname)
+    #if(teamExists != "null"):
+    #    return "team already exists"
+    def autogenerate_subprocess():
+        try:
+            if(verbose):print(dboperator.get_registration_progress_team(teamname))
+            if dboperator.get_registration_progress_team(teamname) == "null": #if no team has been registered, register it
+                dboperator.set_registration_progress_team(teamname,username,1)
+                if (verbose): print("started registration proces for a team")
+                generatecert.gen_team(teamname,domainname,port,protocol,certDirLocation,certdirlocationContainer)
+                dboperator.set_registration_progress_team(teamname,username,2)
+                if (verbose): print("generated certificates for team "+teamname)
+                controller.create_team_namespace(teamname)
+                if (verbose): print("created namespace for team "+teamname)
+                dboperator.set_registration_progress_team(teamname,username,3)
+                controller.create_team_vpn_container(teamname)
+                if (verbose): print("created VPN Container for team "+teamname)
+                dboperator.set_registration_progress_team(teamname,username,4)
+                controller.expose_team_vpn_container(teamname,port)
+                if (verbose): print("exposed VPN Container for team "+teamname)
+                dboperator.set_registration_progress_team(teamname,username,5)
+                if (verbose): print("=9", end="")
+                dboperator.insert_team_into_db(teamname)
+                dboperator.insert_vpn_port_into_db(teamname,port)
+                if (verbose): print("inserted data into db for team "+teamname)
+                dboperator.set_registration_progress_team(teamname,username,6)
+                print("Successfully registered a team ",end="")
+                print(teamname)
+            elif dboperator.get_registration_progress_team(teamname)<6: #status is less than 6, means that team is being registered, so wait while it is being done
+                dboperator.set_registration_progress_team(teamname,username,0)
+                while (dboperator.get_registration_progress_team(teamname)<6):
+                    print("waiting for team "+teamname+" user "+username)
+                    sleep(5)
+                dboperator.set_registration_progress_team(teamname,username,6)
+            elif dboperator.get_registration_progress_team(teamname)>=6: # if team is already registered, then 
+                dboperator.set_registration_progress_team(teamname,username,6)
+            teststatus=dboperator.get_registration_progress_user(teamname,username)
+            if(verbose):print(teststatus)
+            sleep(2) # in case the docker container for ovpn file creation is still running and doing something
+            if (dboperator.get_registration_progress_user(teamname,username)=="null") or (dboperator.get_registration_progress_user(teamname,username)==6): #if user isn't registered or this was the user that first called the team registration
+                if(verbose): print("about to register user in docker")
+                dboperator.set_registration_progress_team(teamname,username,7)
+                controller.docker_register_user(teamname,username)
+                dboperator.set_registration_progress_team(teamname,username,8)
+                if(verbose): print("about to obtain config")
+                config = controller.docker_obtain_user_vpn_config(teamname,username)
+                if(verbose): print("about to insert config into db")
+                dboperator.insert_user_vpn_config(teamname,username,config)
+                dboperator.set_registration_progress_team(teamname,username,9)
+                if(verbose): print("successfully added a user to db")
+                print("-- Registered user (teamname, username )",end="")
+                print(teamname,username)
+                return "successfully added a user to db"
+            return "Successfuly made a team and registered a user"
+        except Exception as e:
+            print(e)
+            print("ERROR registering a team ",end="")
+            print(teamname)
+            return "Something went wrong"
+
+    def del_team_subprocess():
+        if(verbose):str(teamname)+" called del_team_subprocess, about to delete namespace"
+        controller.delete_namespace(teamname)
+        if(verbose):str(teamname)+" namespace deleted, about to delete team VPN directory for team"
+        generatecert.del_team(teamname,certdirlocationContainer)
+        if(verbose):str(teamname)+" cert Directory deleted, about to remove entries of team from db"
+        dboperator.delete_team_and_vpn(teamname)
+        if(verbose):str(teamname)+" entries of team removed from db"
+        Thread(target=autogenerate_subprocess,daemon=True).start()
+
+    Thread(target=del_team_subprocess,daemon=True).start()
+    return "Started a thread for reregistration of team "+teamname
+
 @app.route('/get_last_port',methods=['GET'])
 def get_last_port():
     if (verbose): print("trying to run dboperator.get_last_port()")

@@ -565,8 +565,25 @@ def delete_namespace(teamname,timeout=300,interval=5):
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            k8s_client.read_namespace(name=teamname)
-            if(verbose): print(f"Namespace {teamname} still exists. waiting for interval {str(interval)}")
+            ns = k8s_client.read_namespace(name=teamname)
+
+            # If namespace is stuck terminating → remove finalizers
+            if ns.metadata.deletion_timestamp and ns.spec.finalizers:
+                if verbose: print(f"Namespace {teamname} stuck in Terminating, removing finalizers...")
+                body = {
+                    "metadata": {
+                        "finalizers": []
+                    }
+                }
+                try:
+                    k8s_client.patch_namespace(name=teamname, body=body)
+                except ApiException as e:
+                    print(f"Failed to patch namespace finalizers: {e}")
+                    return 1
+
+            if verbose:
+                print(f"Namespace {teamname} still exists. Waiting {interval}s...")
+
         except ApiException as e:
             if e.status == 404:
                 print(f"Namespace {teamname} successfully deleted.")
@@ -574,6 +591,7 @@ def delete_namespace(teamname,timeout=300,interval=5):
             else:
                 print(f"Unexpected error while checking namespace: {e}")
                 return 1
+
         time.sleep(interval)
 
     print(f"Timeout: Namespace {teamname} not deleted after {timeout} seconds.")
