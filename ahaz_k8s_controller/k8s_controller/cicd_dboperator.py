@@ -371,8 +371,6 @@ def insert_user_vpn_config(teamname, username, config):
     cursor = conn.cursor()
     teamid = get_team_id(teamname)
     config = str(config).replace("\\n", "\n")
-    config = config[2:]
-    config = config[: len(config) - 2]
     config = config.replace(
         "<key>", "route-nopull\nroute " + K8S_IP_RANGE + "\n\n<key>"
     )  # add IP route to the config

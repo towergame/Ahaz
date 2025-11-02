@@ -104,11 +104,9 @@ def get_pods_namespace():
 def register_user_threaded(request_data: UserRequest):
     logger.info(f"Registering user {request_data.user_id} to team {request_data.team_id}...")
     logger.debug("About to register user in docker")
-    controller.docker_register_user(teamname=request_data.team_id, username=request_data.user_id)
+    controller.register_user_ovpn(teamname=request_data.team_id, username=request_data.user_id)
     logger.debug("About to obtain config")
-    config = controller.docker_obtain_user_vpn_config(
-        teamname=request_data.team_id, username=request_data.user_id
-    )
+    config = controller.obtain_user_ovpn_config(teamname=request_data.team_id, username=request_data.user_id)
     logger.debug("About to insert config into db")
     dboperator.insert_user_vpn_config(
         teamname=request_data.team_id, username=request_data.user_id, config=config
@@ -302,13 +300,13 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1):
         ) or (
             dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id) == 6
         ):  # if user isn't registered or this was the user that first called the team registration
-            logger.debug("about to register user in docker")
+            logger.debug("about to register user ovpn config")
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 7)
-            controller.docker_register_user(request_data.team_id, request_data.user_id)
+            controller.register_user_ovpn(request_data.team_id, request_data.user_id)
 
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 8)
             logger.debug("about to obtain config")
-            config = controller.docker_obtain_user_vpn_config(request_data.team_id, request_data.user_id)
+            config = controller.obtain_user_ovpn_config(request_data.team_id, request_data.user_id)
             logger.debug("about to insert config into db")
             dboperator.insert_user_vpn_config(request_data.team_id, request_data.user_id, config)
 

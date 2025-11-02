@@ -3,7 +3,7 @@ import time
 from os import environ
 
 import cicd_dboperator
-import docker
+import generatecert
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -71,9 +71,8 @@ def create_network_policy(namespace):
 
 
 container_registry_creds_name = "regcred"
-certDirLocation = environ.get(
-    "CERT_DIR_HOST", "/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/"
-)
+certDirLocation = environ.get("CERT_DIR_HOST", "/etc/ahaz/certdir")
+certDirLocationContainer = environ.get("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
 
 def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to_user, networklist, taskname):
@@ -536,34 +535,17 @@ def expose_team_vpn_container(teamname, externalport):
         logger.error("Exception when creating service: %s\n" % e)
 
 
-def docker_register_user(teamname, username):
-    client = docker.from_env()
-    vpnDirLocation = certDirLocation + teamname
-    client.containers.run(
-        "kylemanna/openvpn",
-        volumes={vpnDirLocation: {"bind": "/etc/openvpn", "mode": "rw"}},
-        command=["easyrsa", "build-client-full", username, "nopass"],
-    )
-    result = client.containers.run(
-        "kylemanna/openvpn",
-        volumes={vpnDirLocation: {"bind": "/etc/openvpn", "mode": "rw"}},
-        command=["ovpn_getclient", username],
-    )
+def register_user_ovpn(teamname, username):
+    vpnDirLocation = certDirLocationContainer + teamname
+    result = generatecert.generate_user(teamname, username, vpnDirLocation)
     cicd_dboperator.insert_user_vpn_config(teamname, username, result)
     return "successfully registered"
 
 
-def docker_obtain_user_vpn_config(teamname, username):
-    client = docker.from_env()
-    vpnDirLocation = certDirLocation + teamname
-    result = client.containers.run(
-        "kylemanna/openvpn",
-        volumes={vpnDirLocation: {"bind": "/etc/openvpn", "mode": "rw"}},
-        command=["ovpn_getclient", username],
-    )
+def obtain_user_ovpn_config(teamname, username):
+    vpnDirLocation = certDirLocationContainer + teamname
+    result = generatecert.get_user(teamname, username, vpnDirLocation)
     result = str(result).replace("\\n", "\n")
-    result = result[2:]
-    result = result[: len(result) - 2]
     return result
 
 

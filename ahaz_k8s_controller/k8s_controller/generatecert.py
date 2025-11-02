@@ -3,11 +3,12 @@
 import argparse
 import io
 import logging
+import os
 import re
 import subprocess
 import tarfile
 import tempfile
-from os import listdir, makedirs, path
+from os import getenv, listdir, makedirs, path
 from shutil import rmtree
 from typing import Generator
 
@@ -33,6 +34,9 @@ defaults = {
         "tls_clients": [],
     },
 }
+
+PUBLIC_DOMAINNAME = getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
+TEAM_PORT_RANGE_START = int(getenv("TEAM_PORT_RANGE_START", "20000"))
 
 GITHUB_RELEASE_API = "https://api.github.com/repos/OpenVPN/easy-rsa/releases/{:s}"
 EASYRSA_TAG = "v3.1.0"
@@ -491,3 +495,114 @@ def del_team(teamname, certdirlocationContainer):
         logger.debug("deleted team " + teamname + " VPN directory")
     except Exception as e:
         logger.error("failed to delete container directory for team " + teamname + ": " + str(e))
+
+
+def get_client_ovpn_config(
+    ovpn_cn: str,
+    cn: str,
+    easyrsa_pki: str,
+    ovpn_port: int = 1194,
+    ovpn_proto: str = "tcp",
+    ovpn_extra_client_config=None,
+):
+    if ovpn_extra_client_config is None:
+        ovpn_extra_client_config = []
+
+    config = [
+        "client",
+        "nobind",
+        "dev tun",
+        "remote-cert-tls server",
+        f"remote {ovpn_cn} {ovpn_port} {ovpn_proto}",
+    ]
+
+    if ovpn_proto == "udp6":
+        config.append(f"remote {ovpn_cn} {ovpn_port} udp")
+    elif ovpn_proto == "tcp6":
+        config.append(f"remote {ovpn_cn} {ovpn_port} tcp")
+
+    config.extend(ovpn_extra_client_config)
+
+    try:
+        key_path = os.path.join(easyrsa_pki, "private", f"{cn}.key")
+        cert_path = os.path.join(easyrsa_pki, "issued", f"{cn}.crt")
+        ca_path = os.path.join(easyrsa_pki, "ca.crt")
+        ta_path = os.path.join(easyrsa_pki, "ta.key")
+
+        with open(key_path, "r") as f:
+            key_content = f.read()
+
+        # The original script uses `openssl x509 -in ...`. This is often
+        # equivalent to just reading the certificate file if it's in PEM format.
+        # If a specific conversion is required, use the subprocess line instead.
+        result = subprocess.run(
+            ["openssl", "x509", "-in", cert_path], capture_output=True, text=True, check=True
+        )
+        cert_content = result.stdout
+
+        with open(ca_path, "r") as f:
+            ca_content = f.read()
+
+        with open(ta_path, "r") as f:
+            ta_content = f.read()
+
+        config.extend(
+            [
+                "\n<key>",
+                key_content.strip(),
+                "</key>",
+                "<cert>",
+                cert_content.strip(),
+                "</cert>",
+                "<ca>",
+                ca_content.strip(),
+                "</ca>",
+                "key-direction 1",
+                "<tls-auth>",
+                ta_content.strip(),
+                "</tls-auth>",
+            ]
+        )
+    except FileNotFoundError as e:
+        logger.error(f"Configuration file not found at {e.filename}")
+        return f"Error: Configuration file not found at {e.filename}"
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error executing openssl: {e.stderr}")
+        return f"Error executing openssl: {e.stderr}"
+
+    logger.debug("\n".join(config))
+
+    return "\n".join(config)
+
+
+def generate_user(team_id: str, user_id: str, certdirlocationContainer: str) -> str:
+    easyrsa = obtain_easyrsa()
+    if easyrsa is None:
+        raise RuntimeError("EasyRSA installation not found")
+    easyrsa = path.abspath(easyrsa)
+    debug = logger.isEnabledFor(logging.DEBUG)
+    common_args = {
+        "check": True,
+        "cwd": certdirlocationContainer,
+        "stdout": subprocess.PIPE if not debug else None,
+        "stderr": subprocess.PIPE if not debug else None,
+        "universal_newlines": True,
+    }
+    subprocess.run([easyrsa, "build-client-full", user_id, "nopass"], **common_args)
+    return get_client_ovpn_config(
+        PUBLIC_DOMAINNAME,
+        user_id,
+        path.join(certdirlocationContainer, "pki"),
+        # HACK: make a better way of setting the port the client should connect to
+        ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
+    )
+
+
+def get_user(team_id: str, user_id: str, certdirlocationContainer: str) -> str:
+    return get_client_ovpn_config(
+        PUBLIC_DOMAINNAME,
+        user_id,
+        path.join(certdirlocationContainer, team_id, "pki"),
+        # HACK: make a better way of setting the port the client should connect to
+        ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
+    )
