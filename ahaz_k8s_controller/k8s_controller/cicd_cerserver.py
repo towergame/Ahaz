@@ -143,7 +143,7 @@ def getuser():
     return dboperator.get_user_vpn_config(teamname=request_data.team_id, username=request_data.user_id)
 
 
-def gen_team_from_flask_for_subprocess(request_data: RegisterTeamRequest):
+def gen_team_from_flask_for_subprocess(request_data: RegisterTeamRequest) -> str:
     try:
         logger.debug("doing except")
         generatecert.gen_team(
@@ -181,7 +181,7 @@ def team_post():
     return "Started team creation as a thread"
 
 
-def team_post_lazy_subprocess(request_data: TeamRequest):
+def team_post_lazy_subprocess(request_data: TeamRequest) -> str:
     port = int(dboperator.get_last_port()) + 1
     try:
         try:
@@ -234,7 +234,7 @@ def team_post_lazy():
     return "Started team creation as a thread"
 
 
-def autogenerate_subprocess(request_data: UserRequest, port=-1):
+def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
     if port == -1:
         port = int(dboperator.get_last_port()) + 1
     try:
@@ -359,7 +359,7 @@ def autogenerate():
     )
 
 
-def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=False):
+def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=False) -> None:
     logger.debug(str(request_data.team_id) + " called del_team_subprocess, about to delete namespace")
     controller.delete_namespace(request_data.team_id)
     logger.debug(
