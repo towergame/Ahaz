@@ -12,3 +12,6 @@ ahaz_data/certs/*
 
 # MySQL database files
 ahaz_data/mysqldb/mysqldb_volume/*
+
+# Docker Compose override
+docker-compose.override.yaml
