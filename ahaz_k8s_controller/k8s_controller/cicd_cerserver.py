@@ -292,7 +292,8 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1):
 
         teststatus = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
         logger.debug(teststatus)
-        sleep(2)  # in case the docker container for ovpn file creation is still running and doing something
+        # I am unsure if this is necessary? Seems to be a non-issue when I comment it out - Tower
+        # sleep(2)  # in case the docker container for ovpn file creation is still running and doing something
 
         if dboperator.get_registration_progress_team(request_data.team_id) == 10:
             return "team is being reregistered"
