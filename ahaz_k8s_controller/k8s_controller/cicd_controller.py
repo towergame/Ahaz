@@ -255,7 +255,7 @@ def get_pods_namespace(teamname, showInvisible):
                 + pod.metadata.labels["visible"]
                 + ',"task":"'
                 + cicd_dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
-                + ',"name":"'
+                + '","name":"'
                 + pod.metadata.labels["name"]
                 + '"'
                 + "}"
