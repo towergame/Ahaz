@@ -3,16 +3,11 @@ name = "ahaz"
 version = "0.0.1"
 description = "Monorepo for Ahaz"
 readme = "README.md"
-authors = [
-    { name = "auseklitis" },
-    { name = "towergame" }
-]
+authors = [{ name = "auseklitis" }, { name = "towergame" }]
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
-members = [
-    "ahaz_k8s_controller",
-]
+members = ["ahaz_k8s_controller", "ahaz_common"]
 
 [tool.ruff]
 line-length = 110

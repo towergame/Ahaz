@@ -21,7 +21,7 @@ def getUTCasStr():
 def cicd_insert_challenge(name, ctfd_desc, ctfd_score, ctfd_type):
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute(
@@ -46,7 +46,7 @@ def cicd_insert_challenge(name, ctfd_desc, ctfd_score, ctfd_type):
 def cicd_insert_pod(name, k8s_name, image, limits_ram, limits_cpu, visible_to_user):
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         if visible_to_user:
@@ -79,7 +79,7 @@ def cicd_insert_pod(name, k8s_name, image, limits_ram, limits_cpu, visible_to_us
 def cicd_insert_net_rules(name, netname, k8s_name):
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute(
@@ -102,7 +102,7 @@ def cicd_insert_net_rules(name, netname, k8s_name):
 def cicd_insert_env_vars(name, k8s_name, env_var_name, env_var_value):
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute(
@@ -127,7 +127,7 @@ def cicd_insert_env_vars(name, k8s_name, env_var_name, env_var_value):
 def cicd_get_challenges_from_db():
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM challenges;")
@@ -145,7 +145,7 @@ def cicd_get_challenges_from_db():
 def cicd_get_challenge(name):
     try:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM challenges WHERE name='" + name + "';")
@@ -159,7 +159,7 @@ def cicd_get_challenge(name):
 
 
 def cicd_get_pods(name):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM pods WHERE name='" + str(name) + "';")
     rows = cursor.fetchall()
@@ -171,7 +171,7 @@ def cicd_get_pods(name):
 
 
 def cicd_get_env_vars(k8s_name):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM env_vars WHERE k8s_name='" + str(k8s_name) + "';")
     rows = cursor.fetchall()
@@ -187,7 +187,7 @@ def cicd_get_env_vars(k8s_name):
 
 
 def cicd_get_k8s_name_networks(k8s_name):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM net_rules WHERE k8s_name='" + str(k8s_name) + "';")
     rows = cursor.fetchall()
@@ -202,7 +202,7 @@ def cicd_get_k8s_name_networks(k8s_name):
 
 
 def cicd_get_unique_networks(challengename):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT netname FROM net_rules WHERE name = '" + challengename + "' ;")
     rows = cursor.fetchall()
@@ -210,7 +210,7 @@ def cicd_get_unique_networks(challengename):
 
 
 def cicd_get_pods_in_network(challengename, netname):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT k8s_name FROM net_rules WHERE netname = '" + netname + "' AND name = '" + challengename + "';"
@@ -221,7 +221,7 @@ def cicd_get_pods_in_network(challengename, netname):
 
 
 def cicd_get_challenge_from_k8s_name(k8s_name):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute('SELECT name FROM pods WHERE k8s_name="' + k8s_name + '";')
     rows = cursor.fetchall()
@@ -237,7 +237,7 @@ def sanitizeInput(input):
 
 
 def delete_db():
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     try:
         cursor.execute("DROP table teams")
@@ -248,7 +248,7 @@ def delete_db():
 
 
 def create_db():
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         "CREATE table teams(name varchar(255), teamID INT NOT NULL AUTO_INCREMENT,PRIMARY KEY (teamID));"
@@ -269,7 +269,7 @@ def create_db():
 
 
 def insert_image_into_db(repo, name, tag, challengename):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO image(repo,name,tag,challengename) VALUES ('"
@@ -286,7 +286,7 @@ def insert_image_into_db(repo, name, tag, challengename):
 
 
 def get_image_from_db_json(challengename):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         'SELECT repo,name,tag,challengename FROM image WHERE challengename="' + challengename + '"'
@@ -312,7 +312,7 @@ def get_image_from_db_json(challengename):
 
 
 def get_image_from_db(challengename):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         'SELECT repo,name,tag,challengename FROM image WHERE challengename="' + challengename + '"'
@@ -323,7 +323,7 @@ def get_image_from_db(challengename):
 
 
 def get_images_from_db():
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT challengename FROM image")
     # conn.commit()
@@ -338,7 +338,7 @@ def get_images_from_db():
 
 def insert_team_into_db(teamname):
     logger.debug("connecting to db")
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     logger.debug("inserting data in db")
     # implement sanitization here
@@ -350,7 +350,7 @@ def insert_team_into_db(teamname):
 
 
 def insert_vpn_port_into_db(teamname, port):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     teamid = get_team_id(teamname)
     if get_port_team(port) == "null":
@@ -364,7 +364,7 @@ def insert_vpn_port_into_db(teamname, port):
 
 
 def insert_user_vpn_config(teamname, username, config):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     teamid = get_team_id(teamname)
     config = str(config).replace("\\n", "\n")
@@ -388,7 +388,7 @@ def insert_user_vpn_config(teamname, username, config):
 
 
 def get_team_id(teamname):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     # implement sanitization here
     cursor.execute("SELECT (teamID) FROM teams WHERE name='" + teamname + "'")
@@ -402,7 +402,7 @@ def get_team_id(teamname):
 
 
 def get_team_port(teamname):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     teamID = get_team_id(teamname)
     cursor.execute("SELECT (port) FROM vpn_map WHERE teamID='" + str(teamID) + "'")
@@ -416,7 +416,7 @@ def get_team_port(teamname):
 
 
 def get_port_team(port):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT (teamID) FROM vpn_map WHERE port=" + str(port) + "")
     rows = cursor.fetchall()
@@ -430,7 +430,7 @@ def get_port_team(port):
 
 def get_user_vpn_config(teamname, username):
     teamID = get_team_id(teamname)
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT (config) FROM vpn_storage WHERE teamID=" + str(teamID) + " and username='" + username + "'"
@@ -444,22 +444,23 @@ def get_user_vpn_config(teamname, username):
         return "null"
 
 
-def get_last_port():
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+def get_last_port() -> int:
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT (port) FROM vpn_map ORDER BY port DESC")
     rows = cursor.fetchall()
     logger.debug(rows)
     try:
         logger.debug(rows[0][0])
-        return rows[0][0]
-    except:
+        return int(rows[0][0])
+    except Exception as e:
+        logger.error(f"Failed to get last occupied port: {e}")
         return 30100
 
 
 def delete_team_and_vpn(teamname, timeout=300, interval=5):
     start_time = time.time()
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT (teamID) FROM teams WHERE name='" + teamname + "'")
     rows = cursor.fetchall()
@@ -470,7 +471,7 @@ def delete_team_and_vpn(teamname, timeout=300, interval=5):
     cursor.execute("DELETE from register_status WHERE name = '" + teamname + "'")
     while teamIDExists and time.time() - start_time < timeout:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         try:
@@ -486,7 +487,7 @@ def delete_team_and_vpn(teamname, timeout=300, interval=5):
 
         conn.close()
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM vpn_map WHERE teamID = " + teamID)
@@ -507,7 +508,7 @@ def delete_team_and_vpn(teamname, timeout=300, interval=5):
     teamIDExists = True
     while teamIDExists and time.time() - start_time < timeout:
         conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME
+            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
         cursor.execute("DELETE from teams WHERE teamID = " + teamID)
@@ -523,8 +524,8 @@ def delete_team_and_vpn(teamname, timeout=300, interval=5):
     return "something wierd occurred, timeout wasn't reached, but teamID still exists in db"
 
 
-def get_registration_progress_team(teamname):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+def get_registration_progress_team(teamname) -> int:
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     # implement sanitization here
     cursor.execute("SELECT (state) FROM register_status WHERE name='" + teamname + "' ORDER BY state DESC")
@@ -533,13 +534,14 @@ def get_registration_progress_team(teamname):
     logger.debug(rows)
     try:
         logger.debug(rows[0][0])
-        return rows[0][0]
-    except:
-        return "null"
+        return int(rows[0][0])
+    except Exception as e:
+        logger.error(f"Failed to get registration progress for team {teamname}: {e}")
+        return -999
 
 
 def get_registration_progress_user(teamname, username):
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     # implement sanitization here
     cursor.execute(
@@ -561,7 +563,7 @@ def get_registration_progress_user(teamname, username):
 
 def set_registration_progress_team(teamname, username, status):
     logger.debug("connecting to db")
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     logger.debug("inserting registration progress data in db")
     cursor.execute(
@@ -591,7 +593,7 @@ def set_registration_progress_team(teamname, username, status):
 
 
 def printdb():
-    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, passwd=DB_PASSWORD, database=DB_DBNAME)
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM teams")
     rows = cursor.fetchall()

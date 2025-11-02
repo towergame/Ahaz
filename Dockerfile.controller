@@ -25,6 +25,7 @@ ENV KUBECONFIG=/.kube/config.yml
 # Copy over project files
 WORKDIR /app
 COPY ahaz_k8s_controller /app/ahaz_k8s_controller
+COPY ahaz_common /app/ahaz_common
 COPY pyproject.toml /app/pyproject.toml
 
 # Make sure the environment has all the dependencies

@@ -2,6 +2,9 @@
 __pycache__/
 .venv/
 
+# UV artifacts
+*.egg-info/
+
 # Kubernetes configuration files
 ahaz_data/kubectl/*
 !ahaz_data/kubectl/config.yml
