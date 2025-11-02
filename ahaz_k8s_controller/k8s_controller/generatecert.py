@@ -1,61 +1,54 @@
 #!/usr/bin/env python3
 
-from os import path, makedirs, chmod, listdir, environ
-from shutil import rmtree
-from lazycert import LazyCert
 import argparse
 import io
-import jinja2
 import logging
 import re
-import requests
 import subprocess
-import sys
-import sys
 import tarfile
 import tempfile
+from os import listdir, makedirs, path
+from shutil import rmtree
+
+import jinja2
+import requests
 import yaml
-import controller
-verbose = environ.get("VERBOSE","True").lower() in ('true', '1', 't')
-logger = logging.getLogger(__name__)
+
+logger = logging.getLogger()
 script_dir = path.dirname(path.realpath(__file__))
-tools_dir = path.abspath(path.join(script_dir, 'tools'))
+tools_dir = path.abspath(path.join(script_dir, "tools"))
 verbose = True
-wildcard = '*'
+wildcard = "*"
 defaults = {
-    'eve': False,
-    'domain': None,
-    'challenges_directory': './challenges',
-    'challenges': {
-        '*': {
-            'port': 1194,
-            'openvpn_management_port': None,
-            'ifconfig': None
-        }
+    "eve": False,
+    "domain": None,
+    "challenges_directory": "./challenges",
+    "challenges": {"*": {"port": 1194, "openvpn_management_port": None, "ifconfig": None}},
+    "registrar": {
+        "port": 3960,
+        "network": "default",
+        "tls_enabled": False,
+        "tls_verify_client": False,
+        "tls_clients": [],
     },
-    'registrar': {
-        'port': 3960,
-        'network': 'default',
-        'tls_enabled': False,
-        'tls_verify_client': False,
-        'tls_clients': []
-    }
 }
 
-GITHUB_RELEASE_API = 'https://api.github.com/repos/OpenVPN/easy-rsa/releases/{:s}'
-EASYRSA_TAG="v3.1.0"
-EASYRSA_VERSION_PATTERN=re.compile(r'(?:EasyRSA-)?v?((?:\d+\.)*\d+)')
-REGISTRAR_CERT_DIR=path
+GITHUB_RELEASE_API = "https://api.github.com/repos/OpenVPN/easy-rsa/releases/{:s}"
+EASYRSA_TAG = "v3.1.0"
+EASYRSA_VERSION_PATTERN = re.compile(r"(?:EasyRSA-)?v?((?:\d+\.)*\d+)")
+REGISTRAR_CERT_DIR = path
+
 
 def easyrsa_release(tag=None, timeout=5):
     """
     Get the EasyRSA release information from github at a tag or latest if tag is None
     Returns a dictionary parsed from the GitHub release API (https://developer.github.com/v3/repos/releases/)
     """
-    name = 'latest' if tag is None else 'tags/'+tag
+    name = "latest" if tag is None else "tags/" + tag
     with requests.get(GITHUB_RELEASE_API.format(name), timeout=timeout) as resp:
         resp.raise_for_status()
         return resp.json()
+
 
 def easyrsa_installations(dir):
     """Get the EasyRSA versions installed. Returns (version tag, path) tuples for each installed version"""
@@ -66,22 +59,24 @@ def easyrsa_installations(dir):
             if m:
                 yield (m.group(1), subdir)
 
+
 def extract_release(release, dest):
     """Given a release object from the Github API, download and extract the .tgz archive"""
-    for asset in release['assets']:
-        if asset['name'].endswith('.tgz'):
-            download_url = asset['browser_download_url']
+    for asset in release["assets"]:
+        if asset["name"].endswith(".tgz"):
+            download_url = asset["browser_download_url"]
             break
     else:
-        raise ValueError('no .tgz asset in release')
+        raise ValueError("no .tgz asset in release")
 
     if not path.exists(dest):
         makedirs(dest)
 
     with requests.get(download_url, stream=True) as resp:
         resp.raise_for_status()
-        tarball = tarfile.open(fileobj=io.BytesIO(resp.content), mode='r:gz')
+        tarball = tarfile.open(fileobj=io.BytesIO(resp.content), mode="r:gz")
         tarball.extractall(path=dest)
+
 
 def obtain_easyrsa(update=True):
     """Returns the path to the default EasyRSA binary after checking for, and possibly installing, the latest version"""
@@ -91,19 +86,20 @@ def obtain_easyrsa(update=True):
     if update:
         try:
             latest_release = easyrsa_release(EASYRSA_TAG)
-            latest_version = EASYRSA_VERSION_PATTERN.fullmatch(latest_release['tag_name']).group(1)
+            latest_version = EASYRSA_VERSION_PATTERN.fullmatch(latest_release["tag_name"]).group(1)
 
             if latest_install is None or latest_version > latest_install[0]:
                 extract_release(latest_release, tools_dir)
                 latest_install = max(easyrsa_installations(tools_dir))
-                logger.info('Installed EasyRSA %s', latest_version)
+                logger.info("Installed EasyRSA %s", latest_version)
         except OSError:
-            logger.warning('Failed to update EasyRSA')
+            logger.warning("Failed to update EasyRSA")
 
     if latest_install is not None:
-        return path.join(latest_install[1], 'easyrsa')
+        return path.join(latest_install[1], "easyrsa")
     else:
         return None
+
 
 def apply_defaults(config, defaults):
     # Expand the wildcard
@@ -122,101 +118,147 @@ def apply_defaults(config, defaults):
         elif isinstance(default, dict) and isinstance(config[key], dict):
             apply_defaults(config[key], default)
 
+
 def read_config(filename):
-    with open(filename, 'r') as config_file:
+    with open(filename, "r") as config_file:
         config = yaml.safe_load(config_file)
 
     logger.debug("Read from file: %s", config)
     apply_defaults(config, defaults)
 
-    registrar_settings = config['registrar']
-    if 'commonname' not in registrar_settings:
-        registrar_settings['commonname'] = append_domain('registrar', config['domain'])
+    registrar_settings = config["registrar"]
+    if "commonname" not in registrar_settings:
+        registrar_settings["commonname"] = append_domain("registrar", config["domain"])
 
-    for chal_name, chal_settings in config['challenges'].items():
-        if 'commonname' not in chal_settings:
-            chal_settings['commonname'] = append_domain(chal_name, config['domain'])
+    for chal_name, chal_settings in config["challenges"].items():
+        if "commonname" not in chal_settings:
+            chal_settings["commonname"] = append_domain(chal_name, config["domain"])
 
-        if 'files' not in chal_settings:
-            chal_settings['files'] = [path.join(chal_name, 'docker-compose.yml')]
+        if "files" not in chal_settings:
+            chal_settings["files"] = [path.join(chal_name, "docker-compose.yml")]
 
         # Backwards compatibility for clients before ifconfig_push was replaced with ifconfig.
-        if 'ifconfig_push' in chal_settings and chal_settings['ifconfig'] is None:
+        if "ifconfig_push" in chal_settings and chal_settings["ifconfig"] is None:
             logger.warning("Setting ifconfig_push is deprectaed. Please use ifconfig instead.")
-            chal_settings['ifconfig'] = chal_settings['ifconfig_push']
-            del chal_settings['ifconfig_push']
+            chal_settings["ifconfig"] = chal_settings["ifconfig_push"]
+            del chal_settings["ifconfig_push"]
 
     logger.debug("Modified: %s", config)
 
     return config
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
-            description='Parse the Naumachia config file and set up the environment',
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="Parse the Naumachia config file and set up the environment",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument('--verbosity', '-v', metavar="LEVEL", default="info", choices=('critical', 'error', 'warning', 'info', 'debug'), help="logging level to use")
-    parser.add_argument('--config', metavar="PATH", default=path.join(script_dir, 'config.yml'), help='path to Naumachia config file')
-    parser.add_argument('--templates', metavar="PATH", default=path.join(script_dir, 'templates'), help='path to the configuration templates')
-    parser.add_argument('--registrar_certs', metavar="PATH", default=path.join(script_dir, 'registrar/certs'), help='path to the issued certs for registrar TLS')
-    parser.add_argument('--compose', metavar="PATH", default=path.join(script_dir, 'docker-compose.yml'), help='path to the rendered docker-compose output')
-    parser.add_argument('--ovpn_configs', metavar="PATH", default=path.join(script_dir, 'openvpn', 'config'), help='path to openvpn configurations')
-    parser.add_argument('--easyrsa', metavar="PATH", default=None, help='location of easyrsa executable. If the path does not exist, easyrsa will be installed')
+    parser.add_argument(
+        "--verbosity",
+        "-v",
+        metavar="LEVEL",
+        default="info",
+        choices=("critical", "error", "warning", "info", "debug"),
+        help="logging level to use",
+    )
+    parser.add_argument(
+        "--config",
+        metavar="PATH",
+        default=path.join(script_dir, "config.yml"),
+        help="path to Naumachia config file",
+    )
+    parser.add_argument(
+        "--templates",
+        metavar="PATH",
+        default=path.join(script_dir, "templates"),
+        help="path to the configuration templates",
+    )
+    parser.add_argument(
+        "--registrar_certs",
+        metavar="PATH",
+        default=path.join(script_dir, "registrar/certs"),
+        help="path to the issued certs for registrar TLS",
+    )
+    parser.add_argument(
+        "--compose",
+        metavar="PATH",
+        default=path.join(script_dir, "docker-compose.yml"),
+        help="path to the rendered docker-compose output",
+    )
+    parser.add_argument(
+        "--ovpn_configs",
+        metavar="PATH",
+        default=path.join(script_dir, "openvpn", "config"),
+        help="path to openvpn configurations",
+    )
+    parser.add_argument(
+        "--easyrsa",
+        metavar="PATH",
+        default=None,
+        help="location of easyrsa executable. If the path does not exist, easyrsa will be installed",
+    )
 
     return parser.parse_args()
+
 
 def init_pki(easyrsa, directory, cn):
     easyrsa = path.abspath(easyrsa)
     debug = logger.isEnabledFor(logging.DEBUG)
     common_args = {
-        'check': True,
-        'cwd': directory,
-        'stdout': subprocess.PIPE if not debug else None,
-        'stderr': subprocess.PIPE if not debug else None,
-        'universal_newlines': True
+        "check": True,
+        "cwd": directory,
+        "stdout": subprocess.PIPE if not debug else None,
+        "stderr": subprocess.PIPE if not debug else None,
+        "universal_newlines": True,
     }
 
     try:
         logger.info("Initializing public key infrastructure (PKI)")
-        subprocess.run([easyrsa, 'init-pki'], **common_args)
+        subprocess.run([easyrsa, "init-pki"], **common_args)
         logger.info("Building certificiate authority (CA)")
-        subprocess.run([easyrsa, 'build-ca', 'nopass'], input=f"ca.{cn}\n", **common_args)
+        subprocess.run([easyrsa, "build-ca", "nopass"], input=f"ca.{cn}\n", **common_args)
         logger.info("Generating Diffie-Hellman (DH) parameters")
-        subprocess.run([easyrsa, 'gen-dh'], **common_args)
+        subprocess.run([easyrsa, "gen-dh"], **common_args)
         logger.info("Building server certificiate")
-        subprocess.run([easyrsa, 'build-server-full', cn, 'nopass'], **common_args)
+        subprocess.run([easyrsa, "build-server-full", cn, "nopass"], **common_args)
     except subprocess.CalledProcessError as e:
         logger.error(f"Command '{e.cmd}' failed with exit code {e.returncode}")
         if e.output:
             logger.error(e.output)
 
+
 def _render(tpl_path, context):
     dirname, filename = path.split(tpl_path)
-    return jinja2.Environment(
-        loader=jinja2.FileSystemLoader(dirname or './')
-    ).get_template(filename).render(context)
+    return (
+        jinja2.Environment(loader=jinja2.FileSystemLoader(dirname or "./"))
+        .get_template(filename)
+        .render(context)
+    )
+
 
 def render(tpl_path, dst_path, context):
-    with open(dst_path, 'w') as f:
+    with open(dst_path, "w") as f:
         f.write(_render(tpl_path, context))
     logger.info(f"Rendered {dst_path} from {tpl_path} ")
 
+
 def rendertmp(tpl_path, context):
-    f = tempfile.NamedTemporaryFile(mode='w+')
+    f = tempfile.NamedTemporaryFile(mode="w+")
     f.write(_render(tpl_path, context))
     f.flush()
     return f
 
+
 def append_domain(name, domain):
     if domain:
-        return '.'.join((name, domain))
+        return ".".join((name, domain))
     else:
         return name
 
 
-def gen_configs_ovpn(directory,domainname,port,proto):
-    ovpn_env = open(directory+"/ovpn_env.sh","x")
-    ovpn_env.write(f'''declare -x OVPN_AUTH=
+def gen_configs_ovpn(directory, domainname, port, proto):
+    ovpn_env = open(directory + "/ovpn_env.sh", "x")
+    ovpn_env.write(f"""declare -x OVPN_AUTH=
 declare -x OVPN_CIPHER=
 declare -x OVPN_CLIENT_TO_CLIENT=
 declare -x OVPN_CN={domainname}
@@ -241,9 +283,9 @@ declare -x OVPN_ROUTES=([0]="192.168.254.0/24")
 declare -x OVPN_SERVER=192.168.255.0/24
 declare -x OVPN_SERVER_URL={proto}://{domainname}:{port}
 declare -x OVPN_TLS_CIPHER=
-''')
-    openvpn_conf = open(directory+"/openvpn.conf","x")
-    openvpn_conf.write(f'''server 192.168.255.0 255.255.255.0
+""")
+    openvpn_conf = open(directory + "/openvpn.conf", "x")
+    openvpn_conf.write(f"""server 192.168.255.0 255.255.255.0
 verb 3
 key /etc/openvpn/pki/private/{domainname}.key
 ca /etc/openvpn/pki/ca.crt
@@ -274,9 +316,9 @@ push "block-outside-dns"
 push "dhcp-option DNS 8.8.8.8"
 push "dhcp-option DNS 8.8.4.4"
 push "comp-lzo no"
-''')
-    up_sh = open(directory+"/up.sh","x")
-    up_sh.write('''#!/bin/sh
+""")
+    up_sh = open(directory + "/up.sh", "x")
+    up_sh.write("""#!/bin/sh
 # Copyright (c) 2006-2007 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # Contributed by Roy Marples (uberlord@gentoo.org)
@@ -358,9 +400,9 @@ fi
 exit 0
 
 # vim: ts=4 :
-''')
-    down_sh = open(directory+"/down.sh","x")
-    down_sh.write('''#!/bin/sh
+""")
+    down_sh = open(directory + "/down.sh", "x")
+    down_sh.write("""#!/bin/sh
 # Copyright (c) 2006-2007 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # Contributed by Roy Marples (uberlord@gentoo.org)
@@ -394,142 +436,44 @@ exit 0
 
 # vim: ts=4 :
 
-''')
-def gen_ta_key(directory):
-    pkidirectory = directory+"/pki"
-    if (verbose): print("running openvpn --genkey --secret ta.key in "+pkidirectory)
-    subprocess.run("/usr/sbin/openvpn --genkey --secret ta.key",cwd=pkidirectory,shell=True)
+""")
 
-def gen_team(teamname, domainname, port, protocol,certdirlocation,certdirlocationContainer):
+
+def gen_ta_key(directory):
+    pkidirectory = directory + "/pki"
+    logger.debug("running openvpn --genkey --secret ta.key in " + pkidirectory)
+    subprocess.run("/usr/sbin/openvpn --genkey --secret ta.key", cwd=pkidirectory, shell=True)
+
+
+def gen_team(teamname, domainname, port, protocol, certdirlocation, certdirlocationContainer):
     try:
-        #Cert Generation
-        #print("=1", end="")
-        teamdir=certdirlocation+teamname
-        teamdirContainer = certdirlocationContainer+teamname
-        if verbose: print("=2", end="")
+        # Cert Generation
+        # print("=1", end="")
+        teamdir = certdirlocation + teamname
+        teamdirContainer = certdirlocationContainer + teamname
+        logger.debug("=2")
         makedirs(teamdirContainer)
-        if verbose: print("=3", end="")
-        easyrsa=obtain_easyrsa()
-        if verbose: print("=4", end="")
+        logger.debug("=3")
+        easyrsa = obtain_easyrsa()
+        logger.debug("=4")
         init_pki(easyrsa, teamdirContainer, domainname)
-        if verbose: print("=5", end="")
-        gen_configs_ovpn(teamdirContainer,domainname,port,protocol)
-        if verbose: print("=6", end="")
+        logger.debug("=5")
+        gen_configs_ovpn(teamdirContainer, domainname, port, protocol)
+        logger.debug("=6", end="")
         gen_ta_key(teamdirContainer)
-        if verbose: print("=7", end="")
-        #namespace creation
+        logger.debug("=7", end="")
+        # namespace creation
         return 0
     except:
         return 1
-def del_team(teamname,certdirlocationContainer):
+
+
+def del_team(teamname, certdirlocationContainer):
     try:
-        print("called del_team function")
-        teamdirContainer = certdirlocationContainer+teamname
-        print(teamdirContainer)
-        if verbose: print("about to delete team "+teamname+" VPN directory")
+        logger.debug("called del_team function")
+        teamdirContainer = certdirlocationContainer + teamname
+        logger.debug("about to delete team " + teamname + " VPN directory")
         rmtree(teamdirContainer)
-        if verbose: print("deleted team "+teamname+"VPN directory")
+        logger.debug("deleted team " + teamname + "VPN directory")
     except:
-        print("failed to delete container directory for team "+teamname)
-
-
-
-if __name__ == "__main__":
-    if (verbose): print("teamname: " + sys.argv[1])  #name of the team and the dir it will resid ein
-    if (verbose): print("domainname: "+ sys.argv[2])
-    if (verbose): print("port: "+str(sys.argv[3]))
-    if (verbose): print("protocol: "+ sys.argv[4])
-    myteamname=sys.argv[1]
-    myteamdir="./" + sys.argv[1]
-
-
-    #args = parse_args()
-    domainname=sys.argv[2]
-    port=int(sys.argv[3])
-    
-    if(sys.argv[4] == "tcp" or sys.argv[4] == "udp"):
-        protocol=sys.argv[4]    
-    else:
-        print("protocol can only be tcp or udp")
-        exit(1)
-    # Configure logging
-    #levelnum = getattr(logging, args.verbosity.upper(), None)
-    #if not isinstance(levelnum, int):
-    #    raise ValueError('Invalid log level: {}'.format(args.verbosity))
-
-    #logging.basicConfig(level=levelnum, format="[%(levelname)s] %(message)s")
-
-    # Load the config from disk
-    #logger.info("Using config from {}".format(args.config))
-    #config = read_config(args.config)
-
-    # Ensure easyrsa is installed
-    #if args.easyrsa is None:
-    #    args.easyrsa = obtain_easyrsa()
-    #    if args.easyrsa is None:
-    #        logger.error('Failed to find or install easyrsa')
-    #        sys.exit(1)
-
-    #logger.info('Using easyrsa installation at %s', args.easyrsa)
-
-    # Render the docker-compose file
-    #template_path = path.join(args.templates, 'docker-compose.yml.j2')
-    #render(template_path, args.compose, config)
-
-    makedirs(myteamdir)
-    easyrsa=obtain_easyrsa()
-    init_pki(easyrsa, myteamdir, domainname)
-    gen_configs_ovpn(myteamdir,domainname,port,protocol)
-    
-    gen_ta_key(myteamdir)
-    if (verbose): print("exiting before the rest")
-    exit()
-    # Create and missing openvpn config directories
-    for name, chal in config['challenges'].items():
-        config_dirname = path.join(args.ovpn_configs, name)
-        logger.info("Configuring '{}'".format(name))
-
-        if not path.isdir(config_dirname):
-            makedirs(config_dirname)
-            logger.info("Created new openvpn config directory {}".format(config_dirname))
-
-            init_pki(args.easyrsa, config_dirname, chal['commonname'])
-        else:
-            logger.info("Using existing openvpn config directory {}".format(config_dirname))
-
-        # Dump the challenge config into the openvpn directory.
-        with open(path.join(config_dirname, 'challenge.yml'), 'w') as challenge_file:
-            yaml.dump({**chal, 'name': name}, challenge_file, default_flow_style=False)
-        logger.info("Wrote challenge config to {}".format(path.join(config_dirname, 'challenge.yml')))
-
-        # Create the openvpn server config for the challenge.
-        render(
-            path.join(args.templates, 'openvpn.conf.j2'),
-            path.join(config_dirname, 'openvpn.conf'),
-            {**config, 'challenge': chal}
-        )
-
-    # Create certificates for the registrar if needed
-    if config['registrar'] and config['registrar']['tls_enabled']:
-        logger.info("Setting up certificates for registrar in {}".format(args.registrar_certs))
-        if not path.isdir(args.registrar_certs):
-            makedirs(args.registrar_certs)
-
-        generator = LazyCert(args.registrar_certs)
-        config_template = path.join(args.templates, 'openssl.conf.j2')
-
-        # Create the gencert function here to have config and args in closure
-        def gencert(name, ca=None):
-            if not path.isfile(path.join(args.registrar_certs, name + '.crt')):
-                with rendertmp(config_template, {'cn': name, 'ca': ca is None}) as certconfig:
-                    generator.create(name, ca=ca, config=certconfig.name)
-                logger.info("Created new certificate for {}".format(name))
-            else:
-                logger.info("Using existing certificate for {}".format(name))
-
-        # Issue TLS certs, starting with a CA, the the registrar and all clients.
-        ca_name = append_domain('ca', config['domain'])
-        gencert(ca_name)
-        gencert(config['registrar']['commonname'], ca_name)
-        for client in config['registrar']['tls_clients']:
-            gencert(client, ca_name)
+        logger.error("failed to delete container directory for team " + teamname)

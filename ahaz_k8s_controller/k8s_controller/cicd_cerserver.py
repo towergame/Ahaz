@@ -1,5 +1,6 @@
 import json
-from os import environ, getenv
+import logging
+from os import getenv
 from threading import Thread
 from time import sleep
 
@@ -7,23 +8,23 @@ import cicd_controller as controller
 import cicd_dboperator as dboperator
 import generatecert
 import uvicorn
-from flask import Flask, request
 from asgiref.wsgi import WsgiToAsgi
+from flask import Flask, request
 
-verbose = environ.get("VERBOSE", "True").lower() in ("true", "1", "t")
-if verbose:
-    print("verbose set to true")
-# certDirLocation="/home/lime/Desktop/ahaz/docker_experimenting/testCertDirs/"
-# certdirlocationContainer="/certdir/"
-certDirLocation = environ.get(
-    "CERT_DIR_HOST", "/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/"
-)
-certdirlocationContainer = environ.get(
-    "CERT_DIR_CONTAINER", "/home/lime/Desktop/ahaz/ahaz_from_env/ahaz_cicd_env_prod/certDirectory/"
-)
+CERT_DIR_HOST = getenv("CERT_DIR_HOST", "/etc/ahaz/certs/")
+CERT_DIR_CONTAINER = getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certs/")
+PUBLIC_DOMAINNAME = getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
+TEAM_PORT_RANGE_START = int(getenv("TEAM_PORT_RANGE_START", 31200))
+
 app = Flask(__name__)
-public_domainname = environ.get("PUBLIC_DOMAINNAME", "test.lan")
-TeamPortRangeStart = int(environ.get("TEAM_PORT_RANGE_START", 31200))
+
+LOGLEVEL = getenv("LOGLEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOGLEVEL,
+    format="[%(asctime)s | %(levelname)s | %(filename)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger()
 
 
 @app.route("/genteam", methods=["GET"])
@@ -34,14 +35,15 @@ def team_get():
 @app.route("/start_challenge", methods=["POST", "GET"])
 def start_challenge():
     request_data_json = request.get_json()
-    if verbose:
-        print("1234567890")
-    if verbose:
-        print(request_data_json)
+
+    logger.debug(
+        f"Received start challenge request for challenge {request_data_json['challengename']}",
+        f" from {request_data_json['teamname']}",
+    )
     teamname = request_data_json["teamname"]
     challengename = request_data_json["challengename"]
-    print("--starting challenge ", end="")
-    print(teamname, challengename)
+    logger.info("--starting challenge ")
+    logger.info(f" {teamname} {challengename}")
     status = controller.start_challenge(teamname, challengename)
     if status == 0:
         status = "successfully created challenge"
@@ -53,28 +55,12 @@ def stop_challenge():
     request_data_json = request.get_json()
     teamname = request_data_json["teamname"]
     challengename = request_data_json["challengename"]
-    print("--stopping challenge ", end="")
-    print(teamname, challengename)
+    logger.info("--stopping challenge ")
+    logger.info(f" {teamname} {challengename}")
     status = controller.stop_challenge(teamname, challengename)
     return status
 
 
-# performed by CICD
-# @app.route('/insert_image', methods=['POST'])
-# def insert_image():
-#     request_data_json = request.get_json()
-#     repo=request_data_json["repo"]
-#     name=request_data_json["name"]
-#     tag=request_data_json["tag"]
-#     challengename=request_data_json["challengename"]
-#     dboperator.insert_image_into_db(repo,name,tag,challengename)
-#     return "added image to db"
-# @app.route('/get_image', methods=['GET'])
-# def get_image():
-#     request_data_json = request.get_json()
-#     challengename=request_data_json["challengename"]
-#     get_image_json=dboperator.get_image_from_db_json(challengename)
-#     return get_image_json
 @app.route("/get_images", methods=["GET"])
 def get_images():
     get_images_json = dboperator.cicd_get_images_from_db()
@@ -84,52 +70,42 @@ def get_images():
 @app.route("/get_challenges", methods=["GET"])
 def get_challenges():
     get_challenges_json = dboperator.cicd_get_challenges_from_db()
-    if verbose:
-        print(get_challenges_json)
+    logger.debug(get_challenges_json)
     return str(get_challenges_json)
 
 
 @app.route("/get_pods_namespace", methods=["GET"])
 def get_pods_namespace():
     request_data_json = request.get_json()
-    if verbose:
-        print(request_data_json)
+    logger.debug(request_data_json)
     teamname = str(request_data_json["teamname"])
     podresult = controller.get_pods_namespace(teamname, 0)
-    if verbose:
-        print(podresult)
+    logger.debug(podresult)
     return podresult
 
 
 @app.route("/add_user", methods=["POST"])
 def adduser():
-    if verbose:
-        print("---")
+    logger.debug("---")
     request_data_json = request.get_json()
     teamname = request_data_json["teamname"]
     username = request_data_json["username"]
-    if verbose:
-        print(teamname)
-    if verbose:
-        print(username)
+    logger.debug(teamname)
+    logger.debug(username)
     userExists = dboperator.get_user_vpn_config(teamname=teamname, username=username)
     if userExists != "null":
         return "user already registered"
 
     def register_user_threaded():
-        if verbose:
-            print("about to register user in docker")
+        logger.debug("about to register user in docker")
         controller.docker_register_user(teamname, username)
-        if verbose:
-            print("about to obtain config")
+        logger.debug("about to obtain config")
         config = controller.docker_obtain_user_vpn_config(teamname, username)
-        if verbose:
-            print("about to insert config into db")
+        logger.debug("about to insert config into db")
         dboperator.insert_user_vpn_config(teamname, username, config)
-        if verbose:
-            print("successfully added a user to db")
-        print("-- Registered user (teamname, username )", end="")
-        print(teamname, username)
+        logger.debug("successfully added a user to db")
+        logger.info("-- Registered user (teamname, username )")
+        logger.info(teamname, username)
         return "successfully added a user to db"
 
     # except:
@@ -145,12 +121,11 @@ def getuser():
     teamname = request_data_json["teamname"]
     username = request_data_json["username"]
     return dboperator.get_user_vpn_config(teamname, username)
-    return controller.docker_obtain_user_vpn_config(teamname, username)
 
 
 @app.route("/gen_team", methods=["POST"])
 def team_post():
-    print(request.get_json())
+    logger.debug(request.get_json())
     request_data_json = request.get_json()
     request_data = json.dumps(request_data_json)
     error = "please specify a"
@@ -159,26 +134,22 @@ def team_post():
     port = -1
     protocol = "tcp"
     try:
-        if verbose:
-            print(request_data_json["teamname"])
+        logger.debug(request_data_json["teamname"])
         teamname = request_data_json["teamname"]
     except:
         error += " teamname"
     try:
-        if verbose:
-            print(request_data_json["domainname"])
+        logger.debug(request_data_json["domainname"])
         domainname = request_data_json["domainname"]
     except:
         error += " domainname"
     try:
-        if verbose:
-            print(request_data_json["port"])
+        logger.debug(request_data_json["port"])
         port = int(request_data_json["port"])
     except:
         error += " port"
     try:
-        if verbose:
-            print(request_data_json["protocol"])
+        logger.debug(request_data_json["protocol"])
         if request_data_json["protocol"] != "tcp" and request_data_json["protocol"] != "udp":
             return "protocol should be tcp or udp"
         else:
@@ -189,20 +160,14 @@ def team_post():
 
         def gen_team_from_flask_for_subprocess():
             try:
-                if verbose:
-                    print("doing except")
-                generatecert.gen_team(
-                    teamname, domainname, port, protocol, certDirLocation, certdirlocationContainer
-                )
+                logger.debug("doing except")
+                generatecert.gen_team(teamname, domainname, port, protocol, CERT_DIR_HOST, CERT_DIR_CONTAINER)
                 controller.create_team_namespace(teamname)
-                if verbose:
-                    print("=8", end="")
+                logger.debug("=8")
                 controller.create_team_vpn_container(teamname)
-                if verbose:
-                    print("about to expose team vpn container")
+                logger.debug("about to expose team vpn container")
                 controller.expose_team_vpn_container(teamname, port)
-                if verbose:
-                    print("=9", end="")
+                logger.debug("=9")
                 dboperator.insert_team_into_db(teamname)
                 dboperator.insert_vpn_port_into_db(teamname, port)
                 return "Successfuly made a team"
@@ -210,22 +175,21 @@ def team_post():
                 return "Something went wrong"
 
         Thread(target=gen_team_from_flask_for_subprocess, daemon=True).start()
-        print("started team creation as a thread ", end="")
-        print(teamname)
+        logger.info("started team creation as a thread %s", teamname)
         return "Started team creation as a thread"
     else:
-        print("ERROR reigstering team ", end="")
+        print("ERROR reigstering team ")
         print(error)
         return error
 
 
 @app.route("/gen_team_lazy", methods=["POST"])
 def team_post_lazy():
-    print(request.get_json())
+    logger.info(request.get_json())
     request_data_json = request.get_json()
     request_data = json.dumps(request_data_json)
     error = "please specify a"
-    domainname = public_domainname
+    domainname = PUBLIC_DOMAINNAME
     port = int(dboperator.get_last_port()) + 1
     protocol = "tcp"
     teamname = request_data_json["teamname"]
@@ -236,31 +200,26 @@ def team_post_lazy():
     def team_post_lazy_subprocess():
         try:
             try:
-                t1 = Thread(generatecert.gen_team, [teamname, domainname, port, protocol, certDirLocation])
+                t1 = Thread(
+                    generatecert.gen_team,
+                    [teamname, domainname, port, protocol, CERT_DIR_HOST, CERT_DIR_CONTAINER],
+                )
                 t1.start()
             except:
-                if verbose:
-                    print("doing except")
-                generatecert.gen_team(
-                    teamname, domainname, port, protocol, certDirLocation, certdirlocationContainer
-                )
+                logger.debug("doing except")
+                generatecert.gen_team(teamname, domainname, port, protocol, CERT_DIR_HOST, CERT_DIR_CONTAINER)
                 controller.create_team_namespace(teamname)
-                if verbose:
-                    print("=8", end="")
+                logger.debug("=8")
                 controller.create_team_vpn_container(teamname)
-                if verbose:
-                    print("about to expose team vpn container")
+                logger.debug("about to expose team vpn container")
                 controller.expose_team_vpn_container(teamname, port)
-                if verbose:
-                    print("=9", end="")
+                logger.debug("=9")
                 dboperator.insert_team_into_db(teamname)
                 dboperator.insert_vpn_port_into_db(teamname, port)
-            print("Successfully registered a team", end="")
-            print(teamname)
+            logger.info("Successfully registered a team %s", teamname)
             return "Successfuly made a team"
         except:
-            print("ERROR registering a team ", end="")
-            print(teamname)
+            logger.error("ERROR registering a team %s", teamname)
             return "Something went wrong"
 
     Thread(target=team_post_lazy_subprocess, daemon=True).start()
@@ -269,31 +228,23 @@ def team_post_lazy():
 
 @app.route("/autogenerate", methods=["POST", "GET"])
 def autogenerate():
-    if verbose:
-        print(request.get_json())
+    logger.debug(request.get_json())
     request_data_json = request.get_json()
     request_data = json.dumps(request_data_json)
-    domainname = public_domainname
+    domainname = PUBLIC_DOMAINNAME
     teamPortOffset_str = request_data_json["teamname"].replace(
         "a", ""
     )  # admin teams start with "a" and then contain the number
-    if verbose:
-        print(teamPortOffset_str)
-    teamPortOffset = int(teamPortOffset_str)
-    if verbose:
-        print(teamPortOffset)
-    port = (
-        TeamPortRangeStart + teamPortOffset
+    logger.debug(teamPortOffset_str)
+    port = TEAM_PORT_RANGE_START + int(
+        teamPortOffset_str
     )  # use start + teamID for port, so that no two teams have the same port
     protocol = "tcp"
     teamname = request_data_json["teamname"]
     username = request_data_json["username"]
-    if verbose:
-        print(port)
-    if verbose:
-        print(teamname)
-    if verbose:
-        print(username)
+    logger.debug(port)
+    logger.debug(teamname)
+    logger.debug(username)
 
     # teamExists=dboperator.get_team_id(teamname)
     # if(teamExists != "null"):
@@ -302,47 +253,36 @@ def autogenerate():
         try:
             if dboperator.get_registration_progress_team(teamname) == 10:
                 return "team is being reregistered"
-            if verbose:
-                print(dboperator.get_registration_progress_team(teamname))
+            logger.debug(dboperator.get_registration_progress_team(teamname))
             if (
                 dboperator.get_registration_progress_team(teamname) == "null"
             ):  # if no team has been registered, register it
                 dboperator.set_registration_progress_team(teamname, username, 1)
-                if verbose:
-                    print("started registration proces for a team")
-                generatecert.gen_team(
-                    teamname, domainname, port, protocol, certDirLocation, certdirlocationContainer
-                )
+                logger.debug("started registration proces for a team")
+                generatecert.gen_team(teamname, domainname, port, protocol, CERT_DIR_HOST, CERT_DIR_CONTAINER)
                 dboperator.set_registration_progress_team(teamname, username, 2)
-                if verbose:
-                    print("generated certificates for team " + teamname)
+                logger.debug("generated certificates for team " + teamname)
                 controller.create_team_namespace(teamname)
-                if verbose:
-                    print("created namespace for team " + teamname)
+                logger.debug("created namespace for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 3)
                 controller.create_team_vpn_container(teamname)
-                if verbose:
-                    print("created VPN Container for team " + teamname)
+                logger.debug("created VPN Container for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 4)
                 controller.expose_team_vpn_container(teamname, port)
-                if verbose:
-                    print("exposed VPN Container for team " + teamname)
+                logger.debug("exposed VPN Container for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 5)
-                if verbose:
-                    print("=9", end="")
+                logger.debug("=9")
                 dboperator.insert_team_into_db(teamname)
                 dboperator.insert_vpn_port_into_db(teamname, port)
-                if verbose:
-                    print("inserted data into db for team " + teamname)
+                logger.debug("inserted data into db for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 6)
-                print("Successfully registered a team ", end="")
-                print(teamname)
+                logger.info("Successfully registered a team " + teamname)
             elif (
                 dboperator.get_registration_progress_team(teamname) < 6
             ):  # status is less than 6, means that team is being registered, so wait while it is being done
                 dboperator.set_registration_progress_team(teamname, username, 0)
                 while dboperator.get_registration_progress_team(teamname) < 6:
-                    print("waiting for team " + teamname + " user " + username)
+                    logger.info("waiting for team " + teamname + " user " + username)
                     sleep(5)
                 dboperator.set_registration_progress_team(teamname, username, 6)
             elif (
@@ -350,8 +290,7 @@ def autogenerate():
             ):  # if team is already registered, then
                 dboperator.set_registration_progress_team(teamname, username, 6)
             teststatus = dboperator.get_registration_progress_user(teamname, username)
-            if verbose:
-                print(teststatus)
+            logger.debug(teststatus)
             sleep(
                 2
             )  # in case the docker container for ovpn file creation is still running and doing something
@@ -360,28 +299,22 @@ def autogenerate():
             if (dboperator.get_registration_progress_user(teamname, username) == "null") or (
                 dboperator.get_registration_progress_user(teamname, username) == 6
             ):  # if user isn't registered or this was the user that first called the team registration
-                if verbose:
-                    print("about to register user in docker")
+                logger.debug("about to register user in docker")
                 dboperator.set_registration_progress_team(teamname, username, 7)
                 controller.docker_register_user(teamname, username)
                 dboperator.set_registration_progress_team(teamname, username, 8)
-                if verbose:
-                    print("about to obtain config")
+                logger.debug("about to obtain config")
                 config = controller.docker_obtain_user_vpn_config(teamname, username)
-                if verbose:
-                    print("about to insert config into db")
+                logger.debug("about to insert config into db")
                 dboperator.insert_user_vpn_config(teamname, username, config)
                 dboperator.set_registration_progress_team(teamname, username, 9)
-                if verbose:
-                    print("successfully added a user to db")
-                print("-- Registered user (teamname, username )", end="")
-                print(teamname, username)
+                logger.debug("successfully added a user to db")
+                logger.info("-- Registered user (teamname, username )" + teamname + " " + username)
                 return "successfully added a user to db"
             return "Successfuly made a team and registered a user"
         except Exception as e:
-            print(e)
-            print("ERROR registering a team ", end="")
-            print(teamname)
+            logger.error(e)
+            logger.error("ERROR registering a team " + teamname)
             return "Something went wrong"
 
     status_user = dboperator.get_registration_progress_user(teamname, username)
@@ -412,74 +345,58 @@ def autogenerate():
 @app.route("/regenerate", methods=["POST"])
 def regenerate():
     request_data_json = request.get_json()
-    domainname = public_domainname
+    domainname = PUBLIC_DOMAINNAME
     teamPortOffset_str = request_data_json["teamname"].replace(
         "a", ""
     )  # admin teams start with "a" and then contain the number
-    if verbose:
-        print(teamPortOffset_str)
+    logger.debug(teamPortOffset_str)
     teamPortOffset = int(teamPortOffset_str)
-    if verbose:
-        print(teamPortOffset)
+    logger.debug(teamPortOffset)
     port = (
-        TeamPortRangeStart + teamPortOffset
+        TEAM_PORT_RANGE_START + teamPortOffset
     )  # use start + teamID for port, so that no two teams have the same port
     protocol = "tcp"
     teamname = request_data_json["teamname"]
     username = request_data_json["username"]
-    if verbose:
-        print(port)
-    if verbose:
-        print(teamname)
-    if verbose:
-        print(username)
+    logger.debug(port)
+    logger.debug(teamname)
+    logger.debug(username)
 
     # teamExists=dboperator.get_team_id(teamname)
     # if(teamExists != "null"):
     #    return "team already exists"
     def autogenerate_subprocess():
         try:
-            if verbose:
-                print(dboperator.get_registration_progress_team(teamname))
+            logger.debug(dboperator.get_registration_progress_team(teamname))
             if (
                 dboperator.get_registration_progress_team(teamname) == "null"
             ):  # if no team has been registered, register it
                 dboperator.set_registration_progress_team(teamname, username, 1)
-                if verbose:
-                    print("started registration proces for a team")
-                generatecert.gen_team(
-                    teamname, domainname, port, protocol, certDirLocation, certdirlocationContainer
-                )
+                logger.debug("started registration proces for a team")
+                generatecert.gen_team(teamname, domainname, port, protocol, CERT_DIR_HOST, CERT_DIR_CONTAINER)
                 dboperator.set_registration_progress_team(teamname, username, 2)
-                if verbose:
-                    print("generated certificates for team " + teamname)
+                logger.debug("generated certificates for team " + teamname)
                 controller.create_team_namespace(teamname)
-                if verbose:
-                    print("created namespace for team " + teamname)
+                logger.debug("created namespace for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 3)
                 controller.create_team_vpn_container(teamname)
-                if verbose:
-                    print("created VPN Container for team " + teamname)
+                logger.debug("created VPN Container for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 4)
                 controller.expose_team_vpn_container(teamname, port)
-                if verbose:
-                    print("exposed VPN Container for team " + teamname)
+                logger.debug("exposed VPN Container for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 5)
-                if verbose:
-                    print("=9", end="")
+                logger.debug("=9")
                 dboperator.insert_team_into_db(teamname)
                 dboperator.insert_vpn_port_into_db(teamname, port)
-                if verbose:
-                    print("inserted data into db for team " + teamname)
+                logger.debug("inserted data into db for team " + teamname)
                 dboperator.set_registration_progress_team(teamname, username, 6)
-                print("Successfully registered a team ", end="")
-                print(teamname)
+                logger.info("Successfully registered a team " + teamname)
             elif (
                 dboperator.get_registration_progress_team(teamname) < 6
             ):  # status is less than 6, means that team is being registered, so wait while it is being done
                 dboperator.set_registration_progress_team(teamname, username, 0)
                 while dboperator.get_registration_progress_team(teamname) < 6:
-                    print("waiting for team " + teamname + " user " + username)
+                    logger.info("waiting for team " + teamname + " user " + username)
                     sleep(5)
                 dboperator.set_registration_progress_team(teamname, username, 6)
             elif (
@@ -487,50 +404,39 @@ def regenerate():
             ):  # if team is already registered, then
                 dboperator.set_registration_progress_team(teamname, username, 6)
             teststatus = dboperator.get_registration_progress_user(teamname, username)
-            if verbose:
-                print(teststatus)
+            logger.debug(teststatus)
             sleep(
                 2
             )  # in case the docker container for ovpn file creation is still running and doing something
             if (dboperator.get_registration_progress_user(teamname, username) == "null") or (
                 dboperator.get_registration_progress_user(teamname, username) == 6
             ):  # if user isn't registered or this was the user that first called the team registration
-                if verbose:
-                    print("about to register user in docker")
+                logger.debug("about to register user in docker")
                 dboperator.set_registration_progress_team(teamname, username, 7)
                 controller.docker_register_user(teamname, username)
                 dboperator.set_registration_progress_team(teamname, username, 8)
-                if verbose:
-                    print("about to obtain config")
+                logger.debug("about to obtain config")
                 config = controller.docker_obtain_user_vpn_config(teamname, username)
-                if verbose:
-                    print("about to insert config into db")
+                logger.debug("about to insert config into db")
                 dboperator.insert_user_vpn_config(teamname, username, config)
                 dboperator.set_registration_progress_team(teamname, username, 9)
-                if verbose:
-                    print("successfully added a user to db")
-                print("-- Registered user (teamname, username )", end="")
-                print(teamname, username)
+                logger.debug("successfully added a user to db")
+                logger.info("-- Registered user (teamname, username ) " + teamname + " " + username)
                 return "successfully added a user to db"
-            return "Successfuly made a team and registered a user"
+            return "Successfully made a team and registered a user"
         except Exception as e:
-            print(e)
-            print("ERROR registering a team ", end="")
-            print(teamname)
+            logger.error(e)
+            logger.error("ERROR registering a team " + teamname)
             return "Something went wrong"
 
     def del_team_subprocess():
-        if verbose:
-            str(teamname) + " called del_team_subprocess, about to delete namespace"
+        logger.debug(str(teamname) + " called del_team_subprocess, about to delete namespace")
         controller.delete_namespace(teamname)
-        if verbose:
-            str(teamname) + " namespace deleted, about to delete team VPN directory for team"
-        generatecert.del_team(teamname, certdirlocationContainer)
-        if verbose:
-            str(teamname) + " cert Directory deleted, about to remove entries of team from db"
+        logger.debug(str(teamname) + " namespace deleted, about to delete team VPN directory for team")
+        generatecert.del_team(teamname, CERT_DIR_CONTAINER)
+        logger.debug(str(teamname) + " cert Directory deleted, about to remove entries of team from db")
         dboperator.delete_team_and_vpn(teamname)
-        if verbose:
-            str(teamname) + " entries of team removed from db"
+        logger.debug(str(teamname) + " entries of team removed from db")
         Thread(target=autogenerate_subprocess, daemon=True).start()
 
     Thread(target=del_team_subprocess, daemon=True).start()
@@ -539,8 +445,7 @@ def regenerate():
 
 @app.route("/get_last_port", methods=["GET"])
 def get_last_port():
-    if verbose:
-        print("trying to run dboperator.get_last_port()")
+    logger.debug("trying to run dboperator.get_last_port()")
     return str(dboperator.get_last_port())
 
 
@@ -551,17 +456,13 @@ def del_team():
     teamname = request_data_json["teamname"]
 
     def del_team_subprocess():
-        if verbose:
-            str(teamname) + " called del_team_subprocess, about to delete namespace"
+        logger.debug(str(teamname) + " called del_team_subprocess, about to delete namespace")
         controller.delete_namespace(teamname)
-        if verbose:
-            str(teamname) + " namespace deleted, about to delete team VPN directory for team"
-        generatecert.del_team(teamname, certdirlocationContainer)
-        if verbose:
-            str(teamname) + " cert Directory deleted, about to remove entries of team from db"
+        logger.debug(str(teamname) + " namespace deleted, about to delete team VPN directory for team")
+        generatecert.del_team(teamname, CERT_DIR_CONTAINER)
+        logger.debug(str(teamname) + " cert Directory deleted, about to remove entries of team from db")
         dboperator.delete_team_and_vpn(teamname)
-        if verbose:
-            str(teamname) + " entries of team removed from db"
+        logger.debug(str(teamname) + " entries of team removed from db")
 
     Thread(target=del_team_subprocess(), daemon=True).start()
     return "Started a thread for deletion of team " + teamname

@@ -25,6 +25,7 @@ services:
       TEAM_PORT_RANGE_START: 31000
       TEAM_BACKUP_PORT_RANGE_START: 30500
       TEAM_BACKUP_PORT_RANGE_END: 30999
+      LOGLEVEL: "DEBUG"
     extra_hosts:
       - "minikube:host-gateway"
     networks:
