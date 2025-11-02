@@ -1,0 +1,17 @@
+[project]
+name = "ahaz_k8s_controller"
+version = "0.0.1"
+description = "Kubernetes controller for Ahaz"
+
+dependencies = [
+    "asgiref>=3.10.0",
+    "cryptography>=46.0.3",
+    "docker>=7.1.0",
+    "flask>=3.1.2",
+    "jinja2>=3.1.6",
+    "kubernetes>=34.1.0",
+    "pymysql>=1.1.2",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "uvicorn>=0.38.0",
+]

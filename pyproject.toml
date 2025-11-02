@@ -1,0 +1,30 @@
+[project]
+name = "ahaz"
+version = "0.0.1"
+description = "Monorepo for Ahaz"
+readme = "README.md"
+authors = [
+    { name = "auseklitis" },
+    { name = "towergame" }
+]
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = [
+    "ahaz_k8s_controller",
+]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "C901", "I"]
+typing-modules = ["typing", "typing_extensions", "beartype.typing", "jaxtyping"]
+ignore = ["F722"]
+task-tags = ["TODO", "FIXME", "XXX", "HACK", "STUPID"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+combine-as-imports = true

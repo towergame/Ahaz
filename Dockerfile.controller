@@ -1,0 +1,31 @@
+FROM alpine:3.22
+
+# Install docker and uv
+COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /uvx /bin/
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/
+
+# Install Python and OpenVPN
+RUN apk add --no-cache \
+    openvpn \
+    curl    \
+    python3 \
+    py3-pip
+
+# Install kubectl
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+RUN chmod +x ./kubectl
+RUN mv ./kubectl /usr/local/bin
+
+# Kube config should be mounted on image start
+ENV KUBECONFIG=/.kube/config.yml
+
+# Copy over project files
+WORKDIR /app
+COPY ahaz_k8s_controller /app/ahaz_k8s_controller
+COPY pyproject.toml /app/pyproject.toml
+
+# Make sure the environment has all the dependencies
+RUN uv sync --all-packages
+
+# Run the server
+CMD ["/bin/uv", "run", "/app/ahaz_k8s_controller/k8s_controller/cicd_cerserver.py"]

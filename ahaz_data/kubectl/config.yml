@@ -1,0 +1,21 @@
+# Kubeconfig to access the necessary cluster. You will likely want to update this accordingly to ensure that the container is able to access the cluster.
+apiVersion: v1
+clusters:
+  - cluster:
+      certificate-authority: ./ca.crt
+      server: https://minikube:64064
+    name: minikube
+contexts:
+  - context:
+      cluster: minikube
+      namespace: default
+      user: minikube
+    name: minikube
+current-context: minikube
+kind: Config
+preferences: {}
+users:
+  - name: minikube
+    user:
+      client-certificate: ./client.crt
+      client-key: ./client.key
