@@ -7,6 +7,7 @@ COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/
 # Install Python and OpenVPN
 RUN apk add --no-cache \
     openvpn \
+    openssl \
     curl    \
     python3 \
     py3-pip
