@@ -120,7 +120,7 @@ def cicd_insert_env_vars(name, k8s_name, env_var_name, env_var_value):
         conn.close()
         return "success"
     except Exception as e:
-        logger(e)
+        logger.error(f"Failed to insert env var: {e}")
         return e
 
 
@@ -243,8 +243,8 @@ def delete_db():
         cursor.execute("DROP table teams")
         cursor.execute("DROP table vpn_map")
         cursor.execute("DROP table vpn_storage")
-    except:
-        logger.warning("no db to be deleted")
+    except Exception as e:
+        logger.error(f"Failed to delete db tables: {e}")
 
 
 def create_db():
@@ -257,14 +257,17 @@ def create_db():
     cursor.execute("CREATE table vpn_storage(teamID int,username varchar(255),config varchar(8000));")
 
     cursor.execute(
-        "CREATE table challenges(name varchar(255),ctfd_desc varchar(1024),ctfd_score int,ctfd_type varchar(255));"
+        "CREATE table challenges(name varchar(255),ctfd_desc varchar(1024),"
+        + "ctfd_score int,ctfd_type varchar(255));"
     )
     cursor.execute(
-        "CREATE table pods(name varchar(255),k8s_name varchar(50),image varchar(1024),ram varchar(32),cpu int, visible_to_user bool);"
+        "CREATE table pods(name varchar(255),k8s_name varchar(50),image varchar(1024),"
+        + "ram varchar(32),cpu int, visible_to_user bool);"
     )
     cursor.execute("CREATE table net_rules(name varchar(255),netname varchar(255),k8s_name varchar(50));")
     cursor.execute(
-        "CREATE table env_vars(name varchar(255),k8s_name varchar(50),env_var_name varchar(1024),env_var_value varchar(1024));"
+        "CREATE table env_vars(name varchar(255),k8s_name varchar(50),env_var_name varchar(1024),"
+        + "env_var_value varchar(1024));"
     )
 
 
@@ -387,7 +390,7 @@ def insert_user_vpn_config(teamname, username, config):
     conn.commit()
 
 
-def get_team_id(teamname):
+def get_team_id(teamname) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     # implement sanitization here
@@ -397,11 +400,12 @@ def get_team_id(teamname):
     try:
         logger.debug(rows[0][0])
         return rows[0][0]
-    except:
+    except Exception as e:
+        logger.error(f"Failed to get team ID for {teamname}: {e}")
         return "null"
 
 
-def get_team_port(teamname):
+def get_team_port(teamname) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     teamID = get_team_id(teamname)
@@ -411,11 +415,12 @@ def get_team_port(teamname):
     try:
         logger.debug(rows[0][0])
         return rows[0][0]
-    except:
+    except Exception as e:
+        logger.error(f"Failed to get port for team {teamname}: {e}")
         return "null"
 
 
-def get_port_team(port):
+def get_port_team(port) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute("SELECT (teamID) FROM vpn_map WHERE port=" + str(port) + "")
@@ -424,11 +429,12 @@ def get_port_team(port):
     try:
         logger.debug(rows[0][0])
         return rows[0][0]
-    except:
+    except Exception as e:
+        logger.error(f"Failed to get team for port {port}: {e}")
         return "null"
 
 
-def get_user_vpn_config(teamname, username):
+def get_user_vpn_config(teamname, username) -> str:
     teamID = get_team_id(teamname)
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
@@ -440,7 +446,8 @@ def get_user_vpn_config(teamname, username):
     try:
         logger.debug(rows[0][0])
         return rows[0][0]
-    except:
+    except Exception as e:
+        logger.error(f"Failed to get VPN config for user {username} in team {teamname}: {e}")
         return "null"
 
 
@@ -458,6 +465,43 @@ def get_last_port() -> int:
         return 30100
 
 
+def delete_team(teamID) -> None:
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("DELETE FROM vpn_map WHERE teamID = " + teamID)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to delete vpn_map for teamID = {teamID}: {e}")
+
+    try:
+        cursor.execute("DELETE FROM vpn_storage WHERE teamID = " + teamID)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to delete vpn_storage for teamID = {teamID}: {e}")
+
+    conn.close()
+
+
+def check_teamid_exists(teamID) -> bool:
+    conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM vpn_map WHERE teamID = " + teamID)
+    rows = cursor.fetchall()
+    if len(rows) == 0:
+        cursor.execute("SELECT * FROM vpn_storage WHERE teamID = " + teamID)
+        rows = cursor.fetchall()
+        if len(rows) == 0:
+            teamIDExists = False
+        else:
+            teamIDExists = True
+    else:
+        teamIDExists = True
+    conn.close()
+    return teamIDExists
+
+
 def delete_team_and_vpn(teamname, timeout=300, interval=5):
     start_time = time.time()
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
@@ -470,38 +514,8 @@ def delete_team_and_vpn(teamname, timeout=300, interval=5):
     conn.close()
     cursor.execute("DELETE from register_status WHERE name = '" + teamname + "'")
     while teamIDExists and time.time() - start_time < timeout:
-        conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
-        )
-        cursor = conn.cursor()
-        try:
-            cursor.execute("DELETE FROM vpn_map WHERE teamID = " + teamID)
-            conn.commit()
-        except:
-            logger.debug("vpn_map already deleted for teamID = " + teamID)
-        try:
-            cursor.execute("DELETE FROM vpn_storage WHERE teamID = " + teamID)
-            conn.commit()
-        except:
-            logger.debug("vpn_storage already deleted for teamID = " + teamID)
-
-        conn.close()
-        conn = pymysql.connect(
-            host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
-        )
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM vpn_map WHERE teamID = " + teamID)
-        rows = cursor.fetchall()
-        if len(rows) == 0:
-            cursor.execute("SELECT * FROM vpn_storage WHERE teamID = " + teamID)
-            rows = cursor.fetchall()
-            if len(rows) == 0:
-                teamIDExists = False
-            else:
-                teamIDExists = True
-        else:
-            teamIDExists = True
-        conn.close()
+        delete_team(teamID)
+        teamIDExists = check_teamid_exists(teamID)
         time.sleep(interval)
     if time.time() - start_time >= timeout:
         return "timeout reached"
@@ -540,7 +554,7 @@ def get_registration_progress_team(teamname) -> int:
         return -999
 
 
-def get_registration_progress_user(teamname, username):
+def get_registration_progress_user(teamname, username) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     # implement sanitization here
@@ -557,7 +571,8 @@ def get_registration_progress_user(teamname, username):
     try:
         logger.debug(rows[0][0])
         return rows[0][0]
-    except:
+    except Exception as e:
+        logger.error(f"Failed to get registration progress for user {username} in team {teamname}: {e}")
         return "null"
 
 

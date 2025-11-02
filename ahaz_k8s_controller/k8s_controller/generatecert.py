@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 from os import listdir, makedirs, path
 from shutil import rmtree
+from typing import Generator
 
 import jinja2
 import requests
@@ -50,7 +51,7 @@ def easyrsa_release(tag=None, timeout=5):
         return resp.json()
 
 
-def easyrsa_installations(dir):
+def easyrsa_installations(dir) -> Generator[tuple[str, str], None, None]:
     """Get the EasyRSA versions installed. Returns (version tag, path) tuples for each installed version"""
     if path.isdir(dir):
         subdirs = (subdir for subdir in (path.join(dir, name) for name in listdir(dir)) if path.isdir(subdir))
@@ -79,14 +80,19 @@ def extract_release(release, dest):
 
 
 def obtain_easyrsa(update=True):
-    """Returns the path to the default EasyRSA binary after checking for, and possibly installing, the latest version"""
+    """Returns the path to the default EasyRSA binary after checking for,
+    and possibly installing, the latest version"""
     installed = tuple(easyrsa_installations(tools_dir))
-    latest_install = max(installed) if installed else None
+    latest_install = max([(str(v[0]), str(v[1])) for v in installed]) if installed else ("", "")
 
     if update:
         try:
             latest_release = easyrsa_release(EASYRSA_TAG)
-            latest_version = EASYRSA_VERSION_PATTERN.fullmatch(latest_release["tag_name"]).group(1)
+            version_matches = EASYRSA_VERSION_PATTERN.fullmatch(latest_release["tag_name"])
+            if not version_matches:
+                latest_version = ""
+            else:
+                latest_version = str(version_matches.group(1))
 
             if latest_install is None or latest_version > latest_install[0]:
                 extract_release(latest_release, tools_dir)
@@ -345,7 +351,7 @@ if [ "${PEER_DNS}" != "no" ]; then
 	SEARCH=
 	i=1
 	while true ; do
-		eval opt=\$foreign_option_${i}
+		eval opt=\\$foreign_option_${i}
 		[ -z "${opt}" ] && break
 		if [ "${opt}" != "${opt#dhcp-option DOMAIN *}" ] ; then
 			if [ -z "${DOMAIN}" ] ; then
@@ -449,7 +455,6 @@ def gen_team(teamname, domainname, port, protocol, certdirlocation, certdirlocat
     try:
         # Cert Generation
         # print("=1", end="")
-        teamdir = certdirlocation + teamname
         teamdirContainer = certdirlocationContainer + teamname
         logger.debug("=2")
         makedirs(teamdirContainer)
@@ -459,13 +464,14 @@ def gen_team(teamname, domainname, port, protocol, certdirlocation, certdirlocat
         init_pki(easyrsa, teamdirContainer, domainname)
         logger.debug("=5")
         gen_configs_ovpn(teamdirContainer, domainname, port, protocol)
-        logger.debug("=6", end="")
+        logger.debug("=6")
         gen_ta_key(teamdirContainer)
-        logger.debug("=7", end="")
+        logger.debug("=7")
         # namespace creation
         return 0
-    except:
-        return 1
+    except Exception as e:
+        logger.error("failed to create team " + teamname + " VPN directory: " + str(e))
+        raise e
 
 
 def del_team(teamname, certdirlocationContainer):
@@ -474,6 +480,6 @@ def del_team(teamname, certdirlocationContainer):
         teamdirContainer = certdirlocationContainer + teamname
         logger.debug("about to delete team " + teamname + " VPN directory")
         rmtree(teamdirContainer)
-        logger.debug("deleted team " + teamname + "VPN directory")
-    except:
-        logger.error("failed to delete container directory for team " + teamname)
+        logger.debug("deleted team " + teamname + " VPN directory")
+    except Exception as e:
+        logger.error("failed to delete container directory for team " + teamname + ": " + str(e))
