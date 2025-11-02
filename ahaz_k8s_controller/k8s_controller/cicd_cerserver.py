@@ -12,7 +12,12 @@ from asgiref.wsgi import WsgiToAsgi
 from flask import Flask, request
 from pydantic import ValidationError
 
-from ahaz_common import ChallengeRequest, RegisterTeamRequest, TeamRequest, UserRequest
+from ahaz_common import (
+    ChallengeRequest,
+    RegisterTeamRequest,
+    TeamRequest,
+    UserRequest,
+)
 
 CERT_DIR_HOST = getenv("CERT_DIR_HOST", "/etc/ahaz/certs/")
 CERT_DIR_CONTAINER = getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certs/")
