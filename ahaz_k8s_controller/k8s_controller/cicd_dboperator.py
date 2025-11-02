@@ -398,6 +398,8 @@ def get_team_id(teamname) -> str:
     rows = cursor.fetchall()
     logger.debug(rows)
     try:
+        if len(rows) == 0 or len(rows[0]) == 0:
+            return "null"
         logger.debug(rows[0][0])
         return rows[0][0]
     except Exception as e:
@@ -413,6 +415,8 @@ def get_team_port(teamname) -> str:
     rows = cursor.fetchall()
     logger.debug(rows)
     try:
+        if len(rows) == 0 or len(rows[0]) == 0:
+            return "null"
         logger.debug(rows[0][0])
         return rows[0][0]
     except Exception as e:
@@ -427,6 +431,8 @@ def get_port_team(port) -> str:
     rows = cursor.fetchall()
     logger.debug(rows)
     try:
+        if len(rows) == 0 or len(rows[0]) == 0:
+            return "null"
         logger.debug(rows[0][0])
         return rows[0][0]
     except Exception as e:
@@ -547,6 +553,8 @@ def get_registration_progress_team(teamname) -> int:
     conn.close()
     logger.debug(rows)
     try:
+        if len(rows) == 0 or len(rows[0]) == 0:
+            return -999
         logger.debug(rows[0][0])
         return int(rows[0][0])
     except Exception as e:
@@ -569,6 +577,8 @@ def get_registration_progress_user(teamname, username) -> str:
     conn.close()
     logger.debug(rows)
     try:
+        if len(rows) == 0 or len(rows[0]) == 0:
+            return "null"
         logger.debug(rows[0][0])
         return rows[0][0]
     except Exception as e:

@@ -3,6 +3,7 @@
 import argparse
 import io
 import logging
+import os
 import re
 import subprocess
 import tarfile
@@ -221,10 +222,17 @@ def init_pki(easyrsa, directory, cn):
     try:
         logger.info("Initializing public key infrastructure (PKI)")
         subprocess.run([easyrsa, "init-pki"], **common_args)
+        vars_content = """# Easy-RSA default variables file
+set_var EASYRSA_ALGO "ec"
+set_var EASYRSA_CURVE "secp384r1"
+set_var EASYRSA_DIGEST "sha512"
+"""
+        with open(path.join(directory, "pki/vars"), "w", encoding="utf-8") as f:
+            f.write(vars_content)
         logger.info("Building certificiate authority (CA)")
         subprocess.run([easyrsa, "build-ca", "nopass"], input=f"ca.{cn}\n", **common_args)
-        logger.info("Generating Diffie-Hellman (DH) parameters")
-        subprocess.run([easyrsa, "gen-dh"], **common_args)
+        # logger.info("Generating Diffie-Hellman (DH) parameters")
+        # subprocess.run([easyrsa, "gen-dh"], **common_args)
         logger.info("Building server certificiate")
         subprocess.run([easyrsa, "build-server-full", cn, "nopass"], **common_args)
     except subprocess.CalledProcessError as e:
@@ -296,7 +304,8 @@ verb 3
 key /etc/openvpn/pki/private/{domainname}.key
 ca /etc/openvpn/pki/ca.crt
 cert /etc/openvpn/pki/issued/{domainname}.crt
-dh /etc/openvpn/pki/dh.pem
+dh none
+ecdh-curve secp384r1
 # commented out for testing purposes
 tls-auth /etc/openvpn/pki/ta.key
 key-direction 0
