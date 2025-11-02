@@ -3,7 +3,6 @@
 import argparse
 import io
 import logging
-import os
 import re
 import subprocess
 import tarfile
