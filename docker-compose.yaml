@@ -20,7 +20,8 @@ services:
       DB_USERNAME: "dbeaver"
       DB_PASSWORD: "dbeaver"
       PUBLIC_DOMAINNAME: "ahaz.lan"
-      K8S_IP_RANGE: "10.244.0.0 255.255.255.0"
+      K8S_IP_RANGE: "10.42.0.0 255.255.255.0"
+      VERBOSE: "True"
       TEAM_PORT_RANGE_START: 31000
       TEAM_BACKUP_PORT_RANGE_START: 30500
       TEAM_BACKUP_PORT_RANGE_END: 30999
@@ -67,6 +68,7 @@ services:
 networks:
   ahaz_db_connection:
     driver: bridge
+    #external: true
     internal: true
     ipam:
       config:
