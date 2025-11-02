@@ -7,7 +7,7 @@ __pycache__/
 
 # Kubernetes configuration files
 ahaz_data/kubectl/*
-!ahaz_data/kubectl/config.yml
+!ahaz_data/kubectl/config.example.yml
 
 # OpenVPN certificates
 ahaz_data/certs/*
