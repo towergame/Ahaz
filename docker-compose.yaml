@@ -3,7 +3,7 @@ services:
     depends_on:
       k8s_controller_db:
         condition: service_started
-    image: Martina-CTF/ahaz_k8s_controller:latest
+    image: martina-ctf/ahaz_k8s_controller:latest
     build:
       context: .
       dockerfile: ./Dockerfile.controller
