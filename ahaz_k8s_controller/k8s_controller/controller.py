@@ -566,10 +566,10 @@ def create_team_namespace(teamname: str) -> None:
         try:
             k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
             logger.debug(f"moving regcred to namespace {teamname}")
-            # regcred = k8s_client.read_namespaced_secret(name="regcred", namespace="default")
-            # regcred.metadata.namespace = teamname  # type: ignore
-            # regcred.metadata.resource_version = None  # type: ignore
-            # k8s_client.create_namespaced_secret(namespace=teamname, body=regcred)
+            regcred = k8s_client.read_namespaced_secret(name="regcred", namespace="default")
+            regcred.metadata.namespace = teamname  # type: ignore
+            regcred.metadata.resource_version = None  # type: ignore
+            k8s_client.create_namespaced_secret(namespace=teamname, body=regcred)
         except Exception as e:
             logger.error(f"Error creating namespace {teamname}: {e}")
     except ApiException as e:
