@@ -556,6 +556,19 @@ def stop_challenge(teamname: str, task: str) -> str:
         raise e
 
 
+@retry(**retry_opts)
+def create_secret_in_namespace(teamname: str, secret_data: dict) -> None:
+    try:
+        load_kube_config()
+        k8s_client = client.CoreV1Api()
+        k8s_client.create_namespaced_secret(namespace=teamname, body=secret_data)
+        logger.debug(f"Created secret {secret_data['name']} in namespace {teamname}")
+    except ApiException as e:
+        if e.status != 403:
+            logger.error(f"API Exception when creating secret in namespace {teamname}: {e}")
+        raise e
+
+
 # old functions from old controller
 @retry(**retry_opts)
 def create_team_namespace(teamname: str) -> None:
@@ -570,7 +583,7 @@ def create_team_namespace(teamname: str) -> None:
             )
             regcred.metadata.namespace = teamname  # type: ignore
             regcred.metadata.resource_version = None  # type: ignore
-            k8s_client.create_namespaced_secret(namespace=teamname, body=regcred)
+            create_secret_in_namespace(teamname, regcred)  # type: ignore
         except Exception as e:
             logger.error(f"Error creating namespace {teamname}: {e}")
     except ApiException as e:
