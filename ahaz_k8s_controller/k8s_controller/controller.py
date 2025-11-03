@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from os import environ
@@ -254,22 +255,14 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
             else:
                 state = str(pod.status.phase)
             pod_info.append([pod.metadata.name, state, pod.status.pod_ip])
-            current_pod_info_json = (
-                '{"name":"'
-                + pod.metadata.name
-                + '","status":"'
-                + state
-                + '","ip":"'
-                + pod.status.pod_ip
-                + '","visibleIP":'
-                + pod.metadata.labels["visible"]
-                + ',"task":"'
-                + dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
-                + '","name":"'
-                + pod.metadata.labels["name"]
-                + '"'
-                + "}"
-            )
+            pod_data = {
+                "name": pod.metadata.labels["name"],
+                "status": state,
+                "ip": pod.status.pod_ip,
+                "visibleIP": int(pod.metadata.labels["visible"]),
+                "task": dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"]),
+            }
+            current_pod_info_json = json.dumps(pod_data)
             logger.debug(current_pod_info_json)
             if first:
                 if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):

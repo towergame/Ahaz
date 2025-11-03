@@ -2,11 +2,11 @@ from pydantic import BaseModel
 
 
 class ChallengeRequest(BaseModel):
-    user_id: str
+    team_id: str
     challenge_id: str
 
     def __str__(self):
-        return f"ChallengeRequest(user_id={self.user_id}, challenge_id={self.challenge_id})"
+        return f"ChallengeRequest(team_id={self.team_id}, challenge_id={self.challenge_id})"
 
 
 class TeamRequest(BaseModel):

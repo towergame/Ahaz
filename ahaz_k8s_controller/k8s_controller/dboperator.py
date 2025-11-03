@@ -40,20 +40,18 @@ def cicd_insert_challenge(name: str, ctfd_desc: str, ctfd_score: int, ctfd_type:
         conn.close()
         return "success"
     except Exception as e:
-        logger.error(e)
-        return e
+        logger.error(f"Failed to insert challenge {name}: {e}")
+        raise e
 
 
-def cicd_insert_pod(name: str, k8s_name: str, image: str, limits_ram: str, limits_cpu: int, visible_to_user: bool) -> str:
+def cicd_insert_pod(
+    name: str, k8s_name: str, image: str, limits_ram: str, limits_cpu: int, visible_to_user: bool
+) -> str:
     try:
         conn = pymysql.connect(
             host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME
         )
         cursor = conn.cursor()
-        if visible_to_user:
-            visible_to_user = "TRUE"
-        else:
-            visible_to_user = "FALSE"
         cursor.execute(
             "INSERT INTO pods(name,k8s_name,image,ram,cpu,visible_to_user) VALUES ('"
             + name
@@ -66,15 +64,15 @@ def cicd_insert_pod(name: str, k8s_name: str, image: str, limits_ram: str, limit
             + "',"
             + str(limits_cpu)
             + ","
-            + visible_to_user
+            + str(visible_to_user).upper()
             + ");"
         )
         conn.commit()
         conn.close()
         return "success"
     except Exception as e:
-        logger.error(e)
-        return e
+        logger.error(f"Failed to insert pod {name}: {e}")
+        raise e
 
 
 def cicd_insert_net_rules(name: str, netname: str, k8s_name: str) -> str:
@@ -96,8 +94,8 @@ def cicd_insert_net_rules(name: str, netname: str, k8s_name: str) -> str:
         conn.close()
         return "success"
     except Exception as e:
-        logger.error(e)
-        return e
+        logger.error(f"Failed to insert network rule {name}: {e}")
+        raise e
 
 
 def cicd_insert_env_vars(name: str, k8s_name: str, env_var_name: str, env_var_value: str) -> str:
@@ -122,7 +120,7 @@ def cicd_insert_env_vars(name: str, k8s_name: str, env_var_name: str, env_var_va
         return "success"
     except Exception as e:
         logger.error(f"Failed to insert env var: {e}")
-        return e
+        raise e
 
 
 def cicd_get_challenges_from_db() -> str:
@@ -140,7 +138,7 @@ def cicd_get_challenges_from_db() -> str:
         return json
     except Exception as e:
         logger.error(e)
-        return e
+        raise e
 
 
 def cicd_get_challenge(name) -> str:
@@ -153,10 +151,10 @@ def cicd_get_challenge(name) -> str:
         rows = cursor.fetchall()
         logger.debug(rows)
         conn.close()
-        return rows[0]
+        return str(rows[0])
     except Exception as e:
         logger.error(e)
-        return e
+        raise e
 
 
 def cicd_get_pods(name: str) -> list[tuple]:
@@ -165,10 +163,10 @@ def cicd_get_pods(name: str) -> list[tuple]:
     cursor.execute("SELECT * FROM pods WHERE name='" + str(name) + "';")
     rows = cursor.fetchall()
     try:
-        return rows
+        return list(rows)
     except Exception as e:
-        logger.error(e)
-        return "null"
+        logger.error(f"Failed to get pods for challenge {name}: {e}")
+        return [("null",)]
 
 
 def cicd_get_env_vars(k8s_name: str) -> list[dict] | Literal["null"]:
@@ -218,7 +216,7 @@ def cicd_get_pods_in_network(challengename: str, netname: str) -> list[tuple]:
     )
     rows = cursor.fetchall()
     # print(rows)
-    return rows
+    return list(rows)
 
 
 def cicd_get_challenge_from_k8s_name(k8s_name: str) -> str:
@@ -289,7 +287,7 @@ def insert_image_into_db(repo: str, name: str, tag: str, challengename: str) -> 
     conn.commit()
 
 
-def get_image_from_db_json(challengename: str) -> list[tuple]:
+def get_image_from_db_json(challengename: str) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -323,7 +321,7 @@ def get_image_from_db(challengename: str) -> list[tuple]:
     )
     # conn.commit()
     rows = cursor.fetchall()
-    return rows
+    return list(rows)
 
 
 def get_images_from_db() -> str:
@@ -347,7 +345,7 @@ def insert_team_into_db(teamname: str) -> None:
     logger.debug("inserting data in db")
     # implement sanitization here
     if get_team_id(teamname) != "null":
-        return "team with that name alread exists in db"
+        raise ValueError("team with that name already exists in db")
     cursor.execute("INSERT INTO teams(name) VALUES ('" + teamname + "');")
     logger.debug("INSERT INTO teams(name) VALUES ('" + teamname + "');")
     conn.commit()
@@ -559,6 +557,7 @@ def get_registration_progress_team(teamname: str) -> int:
     except Exception as e:
         logger.error(f"Failed to get registration progress for team {teamname}: {e}")
         return -999
+
 
 def get_registration_progress_user(teamname: str, username: str) -> str:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)

@@ -49,12 +49,12 @@ def start_challenge():
 
     logger.info(
         f"Received start challenge request for challenge {request_data.challenge_id}",
-        f" from {request_data.user_id}",
+        f" from {request_data.team_id}",
     )
-    status = controller.start_challenge(request_data.user_id, request_data.challenge_id)
+    status = controller.start_challenge(request_data.team_id, request_data.challenge_id)
     if status == 0:
         status = "successfully created challenge"
-    return status
+    return str(status), 200
 
 
 @app.route("/stop_challenge", methods=["POST", "GET"])
@@ -67,9 +67,9 @@ def stop_challenge():
 
     logger.info(
         f"Received stop challenge request for challenge {request_data.challenge_id}",
-        f" from {request_data.user_id}",
+        f" from {request_data.team_id}",
     )
-    status = controller.stop_challenge(request_data.user_id, request_data.challenge_id)
+    status = controller.stop_challenge(request_data.team_id, request_data.challenge_id)
     return status
 
 
