@@ -10,7 +10,7 @@ import tarfile
 import tempfile
 from os import getenv, listdir, makedirs, path
 from shutil import rmtree
-from typing import Generator
+from typing import Any, Generator
 
 import jinja2
 import requests
@@ -44,7 +44,7 @@ EASYRSA_VERSION_PATTERN = re.compile(r"(?:EasyRSA-)?v?((?:\d+\.)*\d+)")
 REGISTRAR_CERT_DIR = path
 
 
-def easyrsa_release(tag=None, timeout=5):
+def easyrsa_release(tag=None, timeout=5) -> Any:
     """
     Get the EasyRSA release information from github at a tag or latest if tag is None
     Returns a dictionary parsed from the GitHub release API (https://developer.github.com/v3/repos/releases/)
@@ -65,7 +65,7 @@ def easyrsa_installations(dir) -> Generator[tuple[str, str], None, None]:
                 yield (m.group(1), subdir)
 
 
-def extract_release(release, dest):
+def extract_release(release, dest) -> None:
     """Given a release object from the Github API, download and extract the .tgz archive"""
     for asset in release["assets"]:
         if asset["name"].endswith(".tgz"):
@@ -83,7 +83,7 @@ def extract_release(release, dest):
         tarball.extractall(path=dest)
 
 
-def obtain_easyrsa(update=True):
+def obtain_easyrsa(update=True) -> str | None:
     """Returns the path to the default EasyRSA binary after checking for,
     and possibly installing, the latest version"""
     installed = tuple(easyrsa_installations(tools_dir))
@@ -111,7 +111,7 @@ def obtain_easyrsa(update=True):
         return None
 
 
-def apply_defaults(config, defaults):
+def apply_defaults(config, defaults) -> None:
     # Expand the wildcard
     # Wildcard only makes sense when the value is a dict
     if wildcard in defaults:
@@ -129,7 +129,7 @@ def apply_defaults(config, defaults):
             apply_defaults(config[key], default)
 
 
-def read_config(filename):
+def read_config(filename) -> Any:
     with open(filename, "r") as config_file:
         config = yaml.safe_load(config_file)
 
@@ -158,7 +158,7 @@ def read_config(filename):
     return config
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Parse the Naumachia config file and set up the environment",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -211,7 +211,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def init_pki(easyrsa, directory, cn):
+def init_pki(easyrsa: str, directory: str, cn: str) -> None:
     easyrsa = path.abspath(easyrsa)
     debug = logger.isEnabledFor(logging.DEBUG)
     common_args = {
@@ -244,7 +244,7 @@ set_var EASYRSA_DIGEST "sha512"
             logger.error(e.output)
 
 
-def _render(tpl_path, context):
+def _render(tpl_path: str, context: Any) -> str:
     dirname, filename = path.split(tpl_path)
     return (
         jinja2.Environment(loader=jinja2.FileSystemLoader(dirname or "./"))
@@ -253,27 +253,27 @@ def _render(tpl_path, context):
     )
 
 
-def render(tpl_path, dst_path, context):
+def render(tpl_path: str, dst_path: str, context: Any) -> None:
     with open(dst_path, "w") as f:
         f.write(_render(tpl_path, context))
     logger.info(f"Rendered {dst_path} from {tpl_path} ")
 
 
-def rendertmp(tpl_path, context):
+def rendertmp(tpl_path: str, context: Any) -> tempfile.NamedTemporaryFile:
     f = tempfile.NamedTemporaryFile(mode="w+")
     f.write(_render(tpl_path, context))
     f.flush()
     return f
 
 
-def append_domain(name, domain):
+def append_domain(name: str, domain: str | None) -> str:
     if domain:
         return ".".join((name, domain))
     else:
         return name
 
 
-def gen_configs_ovpn(directory, domainname, port, proto):
+def gen_configs_ovpn(directory: str, domainname: str, port: int, proto: str) -> None:
     ovpn_env = open(directory + "/ovpn_env.sh", "x")
     ovpn_env.write(f"""declare -x OVPN_AUTH=
 declare -x OVPN_CIPHER=
@@ -456,14 +456,13 @@ exit 0
 
 """)
 
-
-def gen_ta_key(directory):
+def gen_ta_key(directory: str) -> None:
     pkidirectory = directory + "/pki"
     logger.debug("running openvpn --genkey --secret ta.key in " + pkidirectory)
     subprocess.run("/usr/sbin/openvpn --genkey --secret ta.key", cwd=pkidirectory, shell=True)
 
 
-def gen_team(teamname, domainname, port, protocol, certdirlocation, certdirlocationContainer):
+def gen_team(teamname: str, domainname: str, port: int, protocol: str, certdirlocation: str, certdirlocationContainer: str) -> int:
     try:
         # Cert Generation
         # print("=1", end="")
@@ -486,7 +485,7 @@ def gen_team(teamname, domainname, port, protocol, certdirlocation, certdirlocat
         raise e
 
 
-def del_team(teamname, certdirlocationContainer):
+def del_team(teamname: str, certdirlocationContainer: str) -> None:
     try:
         logger.debug("called del_team function")
         teamdirContainer = certdirlocationContainer + teamname

@@ -14,7 +14,7 @@ from kubernetes.client.rest import ApiException
 logger = logging.getLogger()
 
 
-def create_network_policy_deny_all(namespace):
+def create_network_policy_deny_all(namespace: str) -> client.V1NetworkPolicy:
     # Load kube config (for local development)
     config.load_kube_config()
 
@@ -32,7 +32,7 @@ def create_network_policy_deny_all(namespace):
     return policy
 
 
-def create_network_policy(namespace):
+def create_network_policy(namespace: str) -> client.V1NetworkPolicy:
     # Load kube config (for local development)
     # Te vajag consul sataisīt https://www.hashicorp.com/en/resources/service-discovery-with-consul-on-kubernetes
     config.load_kube_config()
@@ -74,7 +74,18 @@ container_registry_creds_name = "regcred"
 certDirLocationContainer = environ.get("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
 
-def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to_user, networklist, taskname):
+# TODO: fix unused params
+def start_challenge_pod(
+    teamname: str,
+    k8s_name: str,
+    image: str,
+    ram: str,
+    cpu: str,
+    storage: str,
+    visible_to_user: bool,
+    networklist: list[str],
+    taskname: str,
+) -> None:
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
     taskname = taskname.replace(" ", "-")
@@ -87,7 +98,7 @@ def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to
         "metadata": {
             "name": k8s_name,
             "labels": {
-                "team": str(teamname),
+                "team": teamname,
                 "visible": str(
                     visible_to_user
                 ),  # used to identify if this pods IP address will be shown to user.
@@ -118,7 +129,7 @@ def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to
     create_pod_service(teamname, taskname, k8s_name)
 
 
-def start_challenge(teamname, challengename):
+def start_challenge(teamname: str, challengename: str) -> int:
     logger.debug(" a")
     db_pods_data = dboperator.cicd_get_pods(challengename)
     for i in db_pods_data:
@@ -138,7 +149,8 @@ def start_challenge(teamname, challengename):
 
 
 # TODO: Split this function up to reduce complexity
-def get_pods_namespace(teamname, showInvisible):
+# TODO: showInvisible should be a bool
+def get_pods_namespace(teamname: str, showInvisible: int) -> str:
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
     pod_list = k8s_client.list_namespaced_pod(teamname)
@@ -270,7 +282,7 @@ def get_pods_namespace(teamname, showInvisible):
         return pod_info_json
 
 
-def create_pod_service(teamname, taskname, k8s_name):
+def create_pod_service(teamname: str, taskname: str, k8s_name: str) -> None:
     config.load_kube_config()
     api_instance = client.CoreV1Api()
 
@@ -300,7 +312,7 @@ def create_pod_service(teamname, taskname, k8s_name):
     logger.debug(f"Service created. Status='{api_response.status}'")  # type: ignore
 
 
-def create_network_policy_deny_all_task(teamname, challengename):
+def create_network_policy_deny_all_task(teamname: str, challengename: str) -> client.V1NetworkPolicy:
     sanitized_challengename = challengename.replace(" ", "-").lower()
     taskname = challengename.replace(" ", "-")
     config.load_kube_config()
@@ -321,7 +333,9 @@ def create_network_policy_deny_all_task(teamname, challengename):
     return policy
 
 
-def create_network_policy_allow_task(teamname, challengename, network_pods, netname):
+def create_network_policy_allow_task(
+    teamname: str, challengename: str, network_pods: list[str], netname: str
+) -> client.V1NetworkPolicy:
     # Explicitly allow DNS
     dns_peer = client.V1NetworkPolicyPeer(
         namespace_selector=client.V1LabelSelector(
@@ -378,7 +392,7 @@ def create_network_policy_allow_task(teamname, challengename, network_pods, netn
     return policy
 
 
-def create_challenge_network_policies(teamname, challengename):
+def create_challenge_network_policies(teamname: str, challengename: str) -> None:
     config.load_kube_config()
     api = client.NetworkingV1Api()
     deny_policy = create_network_policy_deny_all_task(teamname, challengename)
@@ -401,7 +415,7 @@ def create_challenge_network_policies(teamname, challengename):
         api.create_namespaced_network_policy(namespace=teamname, body=allow_policy)
 
 
-def stop_challenge(teamname, task):
+def stop_challenge(teamname: str, task: str) -> str:
     task = task.replace(" ", "-")
     config.load_kube_config()
 
@@ -444,7 +458,7 @@ def stop_challenge(teamname, task):
 
 
 # old functions from old controller
-def create_team_namespace(teamname):
+def create_team_namespace(teamname: str) -> None:
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
     try:
@@ -500,7 +514,7 @@ def create_team_vpn_configmap(teamname):
             logger.error(f"Error creating ConfigMap in namespace {teamname}: {e}")
 
 
-def create_team_vpn_container(teamname):
+def create_team_vpn_container(teamname: str) -> None:
     create_team_vpn_configmap(teamname)
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
@@ -550,7 +564,7 @@ def create_team_vpn_container(teamname):
     k8s_client.create_namespaced_pod(body=pod_manifest, namespace=teamname)
 
 
-def expose_team_vpn_container(teamname, externalport):
+def expose_team_vpn_container(teamname: str, externalport: int) -> None:
     logger.debug("about to expose team vpn container")
     k8s_client = client.CoreV1Api()
     service = client.V1Service(
@@ -592,21 +606,21 @@ def expose_team_vpn_container(teamname, externalport):
         logger.error("Exception when creating service: %s\n" % e)
 
 
-def register_user_ovpn(teamname, username):
+def register_user_ovpn(teamname: str, username: str) -> str:
     vpnDirLocation = certDirLocationContainer + teamname
     result = certmanager.generate_user(teamname, username, vpnDirLocation)
     dboperator.insert_user_vpn_config(teamname, username, result)
     return "successfully registered"
 
 
-def obtain_user_ovpn_config(teamname, username):
+def obtain_user_ovpn_config(teamname: str, username: str) -> str:
     vpnDirLocation = certDirLocationContainer + teamname
     result = certmanager.get_user(teamname, username, vpnDirLocation)
     result = str(result).replace("\\n", "\n")
     return result
 
 
-def delete_namespace(teamname, timeout=300, interval=5):
+def delete_namespace(teamname: str, timeout: int = 300, interval: int = 5) -> int:
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
     try:
