@@ -16,6 +16,9 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 logger = logging.getLogger()
 
 PUBLIC_DOMAINNAME = os.getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
+K8S_IMAGEPULLSECRET_NAMESPACE = os.getenv("K8S_IMAGEPULLSECRET_NAMESPACE", "default")
+K8S_IMAGEPULLSECRET_NAME = os.getenv("K8S_IMAGEPULLSECRET_NAME", "regcred")
+certDirLocationContainer = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
 # Quick heuristic to determine if the kube folder has a valid kubeconfig file
 # or merely a service account token.
@@ -134,10 +137,6 @@ def create_network_policy(namespace: str) -> client.V1NetworkPolicy:
         raise e
 
 
-container_registry_creds_name = "regcred"
-certDirLocationContainer = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
-
-
 # TODO: fix unused params
 @retry(**retry_opts)
 def start_challenge_pod(
@@ -187,7 +186,7 @@ def start_challenge_pod(
                         # }
                     }
                 ],
-                "imagePullSecrets": [{"name": container_registry_creds_name}],
+                "imagePullSecrets": [{"name": K8S_IMAGEPULLSECRET_NAME}],
             },
         }
         logger.debug(pod_manifest)
@@ -566,7 +565,9 @@ def create_team_namespace(teamname: str) -> None:
         try:
             k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
             logger.debug(f"moving regcred to namespace {teamname}")
-            regcred = k8s_client.read_namespaced_secret(name="regcred", namespace="default")
+            regcred = k8s_client.read_namespaced_secret(
+                name=K8S_IMAGEPULLSECRET_NAME, namespace=K8S_IMAGEPULLSECRET_NAMESPACE
+            )
             regcred.metadata.namespace = teamname  # type: ignore
             regcred.metadata.resource_version = None  # type: ignore
             k8s_client.create_namespaced_secret(namespace=teamname, body=regcred)
