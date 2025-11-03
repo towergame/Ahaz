@@ -554,7 +554,7 @@ def get_client_ovpn_config(
     return "\n".join(config)
 
 
-def generate_user(team_id: str, user_id: str, certdirlocationContainer: str) -> str:
+def generate_user(team_id: str, user_id: str, teamVPNDirectory: str) -> str:
     easyrsa = obtain_easyrsa()
     if easyrsa is None:
         raise RuntimeError("EasyRSA installation not found")
@@ -562,7 +562,7 @@ def generate_user(team_id: str, user_id: str, certdirlocationContainer: str) -> 
     debug = logger.isEnabledFor(logging.DEBUG)
     common_args = {
         "check": True,
-        "cwd": certdirlocationContainer,
+        "cwd": teamVPNDirectory,
         "stdout": subprocess.PIPE if not debug else None,
         "stderr": subprocess.PIPE if not debug else None,
         "universal_newlines": True,
@@ -571,31 +571,31 @@ def generate_user(team_id: str, user_id: str, certdirlocationContainer: str) -> 
     return get_client_ovpn_config(
         PUBLIC_DOMAINNAME,
         user_id,
-        path.join(certdirlocationContainer, "pki"),
+        path.join(teamVPNDirectory, "pki"),
         # HACK: make a better way of setting the port the client should connect to
         ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
     )
 
 
-def get_user(team_id: str, user_id: str, certdirlocationContainer: str) -> str:
+def get_user(team_id: str, user_id: str, teamVPNDirectory: str) -> str:
     return get_client_ovpn_config(
         PUBLIC_DOMAINNAME,
         user_id,
-        path.join(certdirlocationContainer, team_id, "pki"),
+        path.join(teamVPNDirectory, "pki"),
         # HACK: make a better way of setting the port the client should connect to
         ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
     )
 
 
 def get_server_key(certLocation: str) -> str:
-    key_path = os.path.join(certLocation, "pki", "private", "ahaz.lan.key")
+    key_path = os.path.join(certLocation, "pki", "private", f"{PUBLIC_DOMAINNAME}.key")
     with open(key_path, "r") as f:
         key_content = f.read()
     return key_content
 
 
 def get_server_cert(certLocation: str) -> str:
-    cert_path = os.path.join(certLocation, "pki", "issued", "ahaz.lan.crt")
+    cert_path = os.path.join(certLocation, "pki", "issued", f"{PUBLIC_DOMAINNAME}.crt")
     with open(cert_path, "r") as f:
         cert_content = f.read()
     return cert_content
