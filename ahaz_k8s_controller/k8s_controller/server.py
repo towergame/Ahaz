@@ -4,9 +4,9 @@ from os import getenv
 from threading import Thread
 from time import sleep
 
-import cicd_controller as controller
-import cicd_dboperator as dboperator
-import generatecert
+import certmanager
+import controller
+import dboperator
 import uvicorn
 from asgiref.wsgi import WsgiToAsgi
 from flask import Flask, request
@@ -146,7 +146,7 @@ def getuser():
 def gen_team_from_flask_for_subprocess(request_data: RegisterTeamRequest):
     try:
         logger.debug("doing except")
-        generatecert.gen_team(
+        certmanager.gen_team(
             request_data.team_id,
             request_data.domain_name,
             request_data.port,
@@ -186,7 +186,7 @@ def team_post_lazy_subprocess(request_data: TeamRequest):
     try:
         try:
             t1 = Thread(
-                target=generatecert.gen_team,
+                target=certmanager.gen_team,
                 args=[
                     request_data.team_id,
                     PUBLIC_DOMAINNAME,
@@ -200,7 +200,7 @@ def team_post_lazy_subprocess(request_data: TeamRequest):
         except Exception as e:
             logger.error(f"Error starting certificate generation thread: {e}")
             logger.debug("doing except")
-            generatecert.gen_team(
+            certmanager.gen_team(
                 request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_HOST, CERT_DIR_CONTAINER
             )
             controller.create_team_namespace(request_data.team_id)
@@ -247,7 +247,7 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1):
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 1)
             logger.debug("started registration proces for a team")
 
-            generatecert.gen_team(
+            certmanager.gen_team(
                 request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_HOST, CERT_DIR_CONTAINER
             )
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 2)
@@ -365,7 +365,7 @@ def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=Fals
     logger.debug(
         str(request_data.team_id) + " namespace deleted, about to delete team VPN directory for team"
     )
-    generatecert.del_team(request_data.team_id, CERT_DIR_CONTAINER)
+    certmanager.del_team(request_data.team_id, CERT_DIR_CONTAINER)
     logger.debug(
         str(request_data.team_id) + " cert Directory deleted, about to remove entries of team from db"
     )
@@ -424,4 +424,4 @@ def del_team():
 asgi = WsgiToAsgi(app)
 
 if __name__ == "__main__":
-    uvicorn.run("cicd_cerserver:asgi", host="0.0.0.0", port=5000, workers=4)
+    uvicorn.run("server:asgi", host="0.0.0.0", port=5000, workers=4)

@@ -606,3 +606,59 @@ def get_user(team_id: str, user_id: str, certdirlocationContainer: str) -> str:
         # HACK: make a better way of setting the port the client should connect to
         ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
     )
+
+
+def get_server_key(certLocation: str) -> str:
+    key_path = os.path.join(certLocation, "pki", "private", "ahaz.lan.key")
+    with open(key_path, "r") as f:
+        key_content = f.read()
+    return key_content
+
+
+def get_server_cert(certLocation: str) -> str:
+    cert_path = os.path.join(certLocation, "pki", "issued", "ahaz.lan.crt")
+    with open(cert_path, "r") as f:
+        cert_content = f.read()
+    return cert_content
+
+
+def get_server_ca(certLocation: str) -> str:
+    ca_path = os.path.join(certLocation, "pki", "ca.crt")
+    with open(ca_path, "r") as f:
+        ca_content = f.read()
+    return ca_content
+
+
+def get_server_ta(certLocation: str) -> str:
+    ta_path = os.path.join(certLocation, "pki", "ta.key")
+    with open(ta_path, "r") as f:
+        ta_content = f.read()
+    return ta_content
+
+
+def get_server_ovpn_config(certLocation: str) -> str:
+    ovpn_conf_path = os.path.join(certLocation, "openvpn.conf")
+    with open(ovpn_conf_path, "r") as f:
+        ovpn_conf_content = f.read()
+    return ovpn_conf_content
+
+
+def get_openvpn_env(certLocation: str) -> str:
+    ovpn_env_path = os.path.join(certLocation, "ovpn_env.sh")
+    with open(ovpn_env_path, "r") as f:
+        ovpn_env_content = f.read()
+    return ovpn_env_content
+
+
+def get_up_script(certLocation: str) -> str:
+    up_sh_path = os.path.join(certLocation, "up.sh")
+    with open(up_sh_path, "r") as f:
+        up_sh_content = f.read()
+    return up_sh_content
+
+
+def get_down_script(certLocation: str) -> str:
+    down_sh_path = os.path.join(certLocation, "down.sh")
+    with open(down_sh_path, "r") as f:
+        down_sh_content = f.read()
+    return down_sh_content

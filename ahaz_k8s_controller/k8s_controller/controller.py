@@ -2,8 +2,8 @@ import logging
 import time
 from os import environ
 
-import cicd_dboperator
-import generatecert
+import certmanager
+import dboperator
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -71,7 +71,6 @@ def create_network_policy(namespace):
 
 
 container_registry_creds_name = "regcred"
-certDirLocation = environ.get("CERT_DIR_HOST", "/etc/ahaz/certdir")
 certDirLocationContainer = environ.get("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
 
@@ -81,7 +80,7 @@ def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to
     taskname = taskname.replace(" ", "-")
     storage = storage.replace("Gb", "Gi")
     ram = ram.replace("Gb", "Gi")
-    env_vars = cicd_dboperator.cicd_get_env_vars(k8s_name)
+    env_vars = dboperator.cicd_get_env_vars(k8s_name)
     pod_manifest = {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -121,13 +120,13 @@ def start_challenge_pod(teamname, k8s_name, image, ram, cpu, storage, visible_to
 
 def start_challenge(teamname, challengename):
     logger.debug(" a")
-    db_pods_data = cicd_dboperator.cicd_get_pods(challengename)
+    db_pods_data = dboperator.cicd_get_pods(challengename)
     for i in db_pods_data:
         logger.debug(i)
         k8s_name, image, ram, cpu, visible_to_user = i[1:]
         # =
         storage = "2Gb"
-        netnames = cicd_dboperator.cicd_get_k8s_name_networks(k8s_name)
+        netnames = dboperator.cicd_get_k8s_name_networks(k8s_name)
         networklist = []
         for i in netnames:
             networklist.append(i.replace("teamnet", teamname))
@@ -184,7 +183,7 @@ def get_pods_namespace(teamname, showInvisible):
                 + '","visibleIP":'
                 + pod.metadata.labels["visible"]
                 + ',"task":"'
-                + cicd_dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
+                + dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
                 + '","name":"'
                 + pod.metadata.labels["name"]
                 + '"'
@@ -253,7 +252,7 @@ def get_pods_namespace(teamname, showInvisible):
                 + '","visibleIP":'
                 + pod.metadata.labels["visible"]
                 + ',"task":"'
-                + cicd_dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
+                + dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
                 + '","name":"'
                 + pod.metadata.labels["name"]
                 + '"'
@@ -384,10 +383,10 @@ def create_challenge_network_policies(teamname, challengename):
     api = client.NetworkingV1Api()
     deny_policy = create_network_policy_deny_all_task(teamname, challengename)
     api.create_namespaced_network_policy(namespace=teamname, body=deny_policy)
-    networklist = cicd_dboperator.cicd_get_unique_networks(challengename)
+    networklist = dboperator.cicd_get_unique_networks(challengename)
     for i in networklist:  # understand all networks that will need to be created
         # print(i[0])
-        temp_network_pods = cicd_dboperator.cicd_get_pods_in_network(challengename, i[0])
+        temp_network_pods = dboperator.cicd_get_pods_in_network(challengename, i[0])
         network_pods = []
         netname = i[0]
         for j in temp_network_pods:  # understand all pods that will be present in the network
@@ -459,10 +458,52 @@ def create_team_namespace(teamname):
         logger.error(f"Error creating namespace {teamname}: {e}")
 
 
-def create_team_vpn_container(teamname):
+def create_team_vpn_configmap(teamname):
     config.load_kube_config()
     k8s_client = client.CoreV1Api()
-    teamCertDir = certDirLocation + teamname
+    teamCertDir = certDirLocationContainer + teamname
+
+    ovpn_config = certmanager.get_server_ovpn_config(teamCertDir)
+    server_key = certmanager.get_server_key(teamCertDir)
+    server_cert = certmanager.get_server_cert(teamCertDir)
+    server_ca = certmanager.get_server_ca(teamCertDir)
+    server_ta = certmanager.get_server_ta(teamCertDir)
+    ovpn_env = certmanager.get_openvpn_env(teamCertDir)
+    up_script = certmanager.get_up_script(teamCertDir)
+    down_script = certmanager.get_down_script(teamCertDir)
+
+    config_map = client.V1ConfigMap(
+        api_version="v1",
+        kind="ConfigMap",
+        metadata=client.V1ObjectMeta(name=f"vpn-config-{teamname}"),
+        data={
+            "ovpn.conf": ovpn_config,
+            "server.key": server_key,
+            "server.crt": server_cert,
+            "ca.crt": server_ca,
+            "ta.key": server_ta,
+            "ovpn.env": ovpn_env,
+            "up.sh": up_script,
+            "down.sh": down_script,
+        },
+    )
+
+    try:
+        k8s_client.create_namespaced_config_map(namespace=teamname, body=config_map)
+        logger.debug(f"Created ConfigMap vpn-config-{teamname} in namespace {teamname}")
+    except ApiException as e:
+        # Check if the ConfigMap already exists
+        if e.status == 409:
+            logger.warning(f"ConfigMap vpn-config-{teamname} already exists in namespace {teamname}.")
+            # Here you could add logic to update it if needed
+        else:
+            logger.error(f"Error creating ConfigMap in namespace {teamname}: {e}")
+
+
+def create_team_vpn_container(teamname):
+    create_team_vpn_configmap(teamname)
+    config.load_kube_config()
+    k8s_client = client.CoreV1Api()
     pod_manifest = {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -480,12 +521,28 @@ def create_team_vpn_container(teamname):
                         },
                         {"mountPath": "/dev/net/tun", "name": "dev-net-tun", "readonly": "false"},
                     ],
+                    # TODO: Avoid using privileged mode if possible
                     "securityContext": {"capabilities": {"add": ["NET_ADMIN"]}, "privileged": True},
                     "env": [{"name": "DEBUG", "value": "1"}],
                 }
             ],
             "volumes": [
-                {"name": "vpn-volume", "hostPath": {"path": teamCertDir, "type": "Directory"}},
+                {
+                    "name": "vpn-volume",
+                    "configMap": {
+                        "name": f"vpn-config-{teamname}",
+                        "items": [
+                            {"key": "ovpn.conf", "path": "openvpn.conf"},
+                            {"key": "server.key", "path": "pki/private/ahaz.lan.key"},
+                            {"key": "server.crt", "path": "pki/issued/ahaz.lan.crt"},
+                            {"key": "ca.crt", "path": "pki/ca.crt"},
+                            {"key": "ta.key", "path": "pki/ta.key"},
+                            {"key": "ovpn.env", "path": "ovpn_env.sh"},
+                            {"key": "up.sh", "path": "up.sh"},
+                            {"key": "down.sh", "path": "down.sh"},
+                        ],
+                    },
+                },
                 {"name": "dev-net-tun", "hostPath": {"path": "/dev/net/tun"}},
             ],
         },
@@ -537,14 +594,14 @@ def expose_team_vpn_container(teamname, externalport):
 
 def register_user_ovpn(teamname, username):
     vpnDirLocation = certDirLocationContainer + teamname
-    result = generatecert.generate_user(teamname, username, vpnDirLocation)
-    cicd_dboperator.insert_user_vpn_config(teamname, username, result)
+    result = certmanager.generate_user(teamname, username, vpnDirLocation)
+    dboperator.insert_user_vpn_config(teamname, username, result)
     return "successfully registered"
 
 
 def obtain_user_ovpn_config(teamname, username):
     vpnDirLocation = certDirLocationContainer + teamname
-    result = generatecert.get_user(teamname, username, vpnDirLocation)
+    result = certmanager.get_user(teamname, username, vpnDirLocation)
     result = str(result).replace("\\n", "\n")
     return result
 
