@@ -12,7 +12,6 @@ from os import getenv, listdir, makedirs, path
 from shutil import rmtree
 from typing import Any, Generator
 
-import jinja2
 import requests
 import yaml
 
@@ -242,28 +241,6 @@ set_var EASYRSA_DIGEST "sha512"
         logger.error(f"Command '{e.cmd}' failed with exit code {e.returncode}")
         if e.output:
             logger.error(e.output)
-
-
-def _render(tpl_path: str, context: Any) -> str:
-    dirname, filename = path.split(tpl_path)
-    return (
-        jinja2.Environment(loader=jinja2.FileSystemLoader(dirname or "./"))
-        .get_template(filename)
-        .render(context)
-    )
-
-
-def render(tpl_path: str, dst_path: str, context: Any) -> None:
-    with open(dst_path, "w") as f:
-        f.write(_render(tpl_path, context))
-    logger.info(f"Rendered {dst_path} from {tpl_path} ")
-
-
-def rendertmp(tpl_path: str, context: Any) -> tempfile.NamedTemporaryFile:
-    f = tempfile.NamedTemporaryFile(mode="w+")
-    f.write(_render(tpl_path, context))
-    f.flush()
-    return f
 
 
 def append_domain(name: str, domain: str | None) -> str:
