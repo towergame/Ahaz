@@ -456,13 +456,14 @@ exit 0
 
 """)
 
+
 def gen_ta_key(directory: str) -> None:
     pkidirectory = directory + "/pki"
     logger.debug("running openvpn --genkey --secret ta.key in " + pkidirectory)
     subprocess.run("/usr/sbin/openvpn --genkey --secret ta.key", cwd=pkidirectory, shell=True)
 
 
-def gen_team(teamname: str, domainname: str, port: int, protocol: str, certdirlocation: str, certdirlocationContainer: str) -> int:
+def gen_team(teamname: str, domainname: str, port: int, protocol: str, certdirlocationContainer: str) -> int:
     try:
         # Cert Generation
         # print("=1", end="")
@@ -471,6 +472,8 @@ def gen_team(teamname: str, domainname: str, port: int, protocol: str, certdirlo
         makedirs(teamdirContainer)
         logger.debug("=3")
         easyrsa = obtain_easyrsa()
+        if easyrsa is None:
+            raise RuntimeError("EasyRSA installation not found")
         logger.debug("=4")
         init_pki(easyrsa, teamdirContainer, domainname)
         logger.debug("=5")

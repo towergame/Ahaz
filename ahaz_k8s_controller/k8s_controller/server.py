@@ -19,7 +19,6 @@ from ahaz_common import (
     UserRequest,
 )
 
-CERT_DIR_HOST = getenv("CERT_DIR_HOST", "/etc/ahaz/certs/")
 CERT_DIR_CONTAINER = getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certs/")
 PUBLIC_DOMAINNAME = getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
 TEAM_PORT_RANGE_START = int(getenv("TEAM_PORT_RANGE_START", 31200))
@@ -151,7 +150,6 @@ def gen_team_from_flask_for_subprocess(request_data: RegisterTeamRequest) -> str
             request_data.domain_name,
             request_data.port,
             request_data.protocol,
-            CERT_DIR_HOST,
             CERT_DIR_CONTAINER,
         )
         controller.create_team_namespace(request_data.team_id)
@@ -192,7 +190,6 @@ def team_post_lazy_subprocess(request_data: TeamRequest) -> str:
                     PUBLIC_DOMAINNAME,
                     port,
                     "tcp",
-                    CERT_DIR_HOST,
                     CERT_DIR_CONTAINER,
                 ],
             )
@@ -200,9 +197,7 @@ def team_post_lazy_subprocess(request_data: TeamRequest) -> str:
         except Exception as e:
             logger.error(f"Error starting certificate generation thread: {e}")
             logger.debug("doing except")
-            certmanager.gen_team(
-                request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_HOST, CERT_DIR_CONTAINER
-            )
+            certmanager.gen_team(request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_CONTAINER)
             controller.create_team_namespace(request_data.team_id)
             logger.debug("=8")
             controller.create_team_vpn_container(request_data.team_id)
@@ -247,9 +242,7 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 1)
             logger.debug("started registration proces for a team")
 
-            certmanager.gen_team(
-                request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_HOST, CERT_DIR_CONTAINER
-            )
+            certmanager.gen_team(request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_CONTAINER)
             dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 2)
             logger.debug(f"generated certificates for team {request_data.team_id}")
 
