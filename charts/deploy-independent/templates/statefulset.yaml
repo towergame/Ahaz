@@ -1,0 +1,97 @@
+{{- if .Values.database.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ahaz-controller-db
+  namespace: {{ .Values.controller.namespace.name }}
+  labels:
+    {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "ahaz-k8s-controller.fullname" . }}-db
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ahaz-k8s-controller.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "ahaz-k8s-controller.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: mysql
+          image: {{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ahaz-k8s-controller.fullname" . }}-db-secret
+                  key: mysql-root-password
+            - name: MYSQL_DATABASE
+              value: {{ .Values.database.name }}
+            - name: MYSQL_USER
+              value: {{ .Values.database.user }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ahaz-k8s-controller.fullname" . }}-db-secret
+                  key: mysql-user-password
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d/init.sh
+              subPath: init.sh
+      volumes:
+        - name: init-script
+          configMap:
+            name: {{ include "ahaz-k8s-controller.fullname" . }}-init-script
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-persistent-storage
+        labels:
+          app.kubernetes.io/name: ahaz-controller
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/component: database
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .Values.database.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ahaz-k8s-controller.fullname" . }}-db
+  namespace: {{ .Values.controller.namespace.name }}
+  labels:
+    {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - port: 3306
+      targetPort: mysql
+      protocol: TCP
+      name: mysql
+  selector:
+    {{- include "ahaz-k8s-controller.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ahaz-k8s-controller.fullname" . }}-init-script
+  namespace: {{ .Values.controller.namespace.name }}
+  labels:
+    {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
+data:
+  init.sh: |
+    # FIX: Ensure proper indentation of the included script content.
+    {{- include "ahaz-k8s-controller.dbInitScript" . | nindent 4 }}
+{{- end }}

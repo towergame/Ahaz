@@ -1,0 +1,63 @@
+controller:
+  replicaCount: 1
+  namespace:
+    name: "ahaz-k8s-controller"
+    managedByLabelValue: "k8s-controller"
+
+  image:
+    repository: "localhost:5000/martina-ctf/ahaz_k8s_controller"
+    pullPolicy: IfNotPresent
+    # Overrides the image tag whose default is the chart appVersion.
+    tag: "latest"
+
+
+  volumes:
+    certs:
+      # claimName: my-certs-pvc # Optional: defaults to <fullname>-certs
+      storage: 100Mi
+      # storageClassName: "" # Optional: if you need a specific storage class
+    kubeconfig:
+      # secretName: my-kubeconfig-secret # Optional: defaults to <fullname>-kubeconfig
+
+  publicDomainName: "ctf.example.lan"
+  k8sIpRange: "10.244.0.0/24"
+  teamPortRangeStart: 30000
+  teamBackupPortRangeStart: 25000
+  teamBackupPortRangeEnd: 29999
+  logLevel: "INFO"
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  serviceAccountName: "ahaz-k8s-controller-service-account"
+
+database:
+  # Set to true to use an in-cluster database.
+  # If false, controller.database.external.host is used.
+  enabled: true
+  name: "k8s_controller_db"
+  user: "controller_user"
+  port: 3306
+  # Passwords for the in-cluster database.
+  # These will be stored in a secret.
+  # It is strongly recommended to use --set or a separate values file for production.
+  rootPassword: "secure_password"
+  userPassword: "secure_password"
+
+  image:
+    repository: "mysql"
+    tag: "9.5"
+
+  # Configuration for an external database if database.enabled is false.
+  # external:
+  #   host: "external-db-host.example.com"
+
+  # Storage configuration for the in-cluster database.
+  storage: 1Gi
+  # storageClassName: "" # Optional: if you need a specific storage class
+
+# ServiceAccount configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+
+kyverno:
+  namespace: "kyverno"
