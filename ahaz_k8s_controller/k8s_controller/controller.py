@@ -528,7 +528,6 @@ def create_team_vpn_container(teamname: str) -> None:
                         },
                         {"mountPath": "/dev/net/tun", "name": "dev-net-tun", "readonly": "false"},
                     ],
-                    # TODO: Avoid using privileged mode if possible
                     "securityContext": {"capabilities": {"add": ["NET_ADMIN"]}},
                     "env": [{"name": "DEBUG", "value": "1"}],
                 }
