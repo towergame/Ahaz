@@ -365,13 +365,35 @@ def insert_vpn_port_into_db(teamname: str, port: int) -> str | None:
         return "port " + str(port) + " is already allocated"
 
 
+# Mmmmm, cider...
+def cidr_to_netmask(cidr: int) -> str:
+    mask = (0xFFFFFFFF >> (32 - cidr)) << (32 - cidr)
+    return f"{(mask >> 24) & 0xFF}.{(mask >> 16) & 0xFF}.{(mask >> 8) & 0xFF}.{mask & 0xFF}"
+
+
+def ip_and_cidr_to_netmask(ip_cidr: str) -> str:
+    ip, cidr = ip_cidr.split("/")
+    cidr = int(cidr)
+    netmask = cidr_to_netmask(cidr)
+    return ip + " " + netmask
+
+
+def parse_ip_range(ip_range: str) -> str:
+    if ip_range.count("/") == 1:
+        return ip_and_cidr_to_netmask(ip_range)
+    elif ip_range.count(" ") == 1:
+        return ip_range
+    else:
+        raise ValueError("Invalid IP range format")
+
+
 def insert_user_vpn_config(teamname: str, username: str, config: str) -> None:
     conn = pymysql.connect(host=DB_IP, port=3306, user=DB_USERNAME, password=DB_PASSWORD, database=DB_DBNAME)
     cursor = conn.cursor()
     teamid = get_team_id(teamname)
     config = str(config).replace("\\n", "\n")
     config = config.replace(
-        "<key>", "route-nopull\nroute " + K8S_IP_RANGE + "\n\n<key>"
+        "<key>", "route-nopull\nroute " + parse_ip_range(K8S_IP_RANGE) + "\n\n<key>"
     )  # add IP route to the config
     config = config.replace("redirect-gateway def1", "")  # remove the rule that replaces all routes with VPN
     config = config + "\ncomp-lzo yes\nallow-compression yes"
