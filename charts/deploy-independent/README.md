@@ -14,5 +14,5 @@ Current security policies enforced:
 ## TODO
 - [ ] Limit the capabilities of pods deployed by Ahaz
 - [ ] Add default resource limits/requests for pods created by Ahaz
-- [ ] Create a default network policy for namespaces created by Ahaz
+- [x] Create a default network policy for namespaces created by Ahaz
 - [ ] Add option to insert secrets that may be copied into created namespaces

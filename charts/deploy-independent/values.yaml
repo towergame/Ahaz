@@ -1,7 +1,6 @@
 controller:
   replicaCount: 1
   namespace:
-    name: "ahaz-k8s-controller"
     managedByLabelValue: "k8s-controller"
 
   image:
@@ -9,7 +8,6 @@ controller:
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: "latest"
-
 
   volumes:
     certs:
@@ -24,7 +22,7 @@ controller:
   teamPortRangeStart: 30000
   teamBackupPortRangeStart: 25000
   teamBackupPortRangeEnd: 29999
-  logLevel: "INFO"
+  logLevel: "DEBUG"
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   serviceAccountName: "ahaz-k8s-controller-service-account"
@@ -54,10 +52,14 @@ database:
   storage: 1Gi
   # storageClassName: "" # Optional: if you need a specific storage class
 
-# ServiceAccount configuration
+  # ServiceAccount configuration
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
 
 kyverno:
   namespace: "kyverno"
+
+pullsecrets:
+  name: "regcred"
+  namespace: "ahaz-secrets"

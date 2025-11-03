@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "ahaz-k8s-controller.fullname" . }}
-  namespace: {{ .Values.controller.namespace.name }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
 spec:
@@ -36,7 +36,7 @@ spec:
               readOnly: false
           env:
             - name: DB_IP
-              value: "{{- if .Values.database.enabled }}{{ printf "%s-db.%s" (include "ahaz-k8s-controller.fullname" .) .Values.controller.namespace.name }}{{- else }}{{ .Values.controller.database.external.host }}{{- end }}"
+              value: "{{- if .Values.database.enabled }}{{ printf "%s-db.%s" (include "ahaz-k8s-controller.fullname" .) .Release.Namespace }}{{- else }}{{ .Values.controller.database.external.host }}{{- end }}"
             - name: DB_DBNAME
               value: "{{ .Values.database.name }}"
             - name: DB_USERNAME
@@ -60,12 +60,16 @@ spec:
               value: "{{ .Values.controller.teamBackupPortRangeEnd }}"
             - name: LOGLEVEL
               value: "{{ .Values.controller.logLevel }}"
+            - name: K8S_IMAGEPULLSECRET_NAME
+              value: "{{ .Values.pullsecrets.name }}"
+            - name: K8S_IMAGEPULLSECRET_NAMESPACE
+              value: "{{ .Values.pullsecrets.namespace }}"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "ahaz-k8s-controller.fullname" . }}
-  namespace: {{ .Values.controller.namespace.name }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
 spec:
@@ -83,7 +87,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ .Values.controller.volumes.certs.claimName | default (printf "%s-certs" (include "ahaz-k8s-controller.fullname" .)) }}
-  namespace: {{ .Values.controller.namespace.name }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
 spec:
