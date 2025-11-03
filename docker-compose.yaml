@@ -12,7 +12,6 @@ services:
       - ./ahaz_data/certs/:/certdir
       - ./ahaz_data/kubectl:/.kube/
     environment:
-      CERT_DIR_HOST: ${PWD}/ahaz_data/certs/
       CERT_DIR_CONTAINER: "/certdir/"
       DB_IP: "10.33.0.3"
       DB_DBNAME: "ahaz"
