@@ -1,5 +1,6 @@
 import json
 import logging
+import logging.config
 from os import getenv
 from threading import Thread
 from time import sleep
@@ -33,6 +34,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
+# Set kubernetes client logging level to INFO to reduce verbosity
+logging.getLogger("kubernetes").setLevel(logging.INFO)
+
 
 @app.route("/genteam", methods=["GET"])
 def team_get():
@@ -48,8 +52,8 @@ def start_challenge():
         return "Invalid request data", 400
 
     logger.info(
-        f"Received start challenge request for challenge {request_data.challenge_id}",
-        f" from {request_data.team_id}",
+        f"Received start challenge request for challenge {request_data.challenge_id}"
+        + f" from {request_data.team_id}"
     )
     status = controller.start_challenge(request_data.team_id, request_data.challenge_id)
     if status == 0:
@@ -75,15 +79,13 @@ def stop_challenge():
 
 @app.route("/get_images", methods=["GET"])
 def get_images():
-    get_images_json = dboperator.get_images_from_db()
-    return get_images_json
+    return [{"challengename": challenge} for challenge in dboperator.get_images_from_db()]
 
 
 @app.route("/get_challenges", methods=["GET"])
 def get_challenges():
-    get_challenges_json = dboperator.cicd_get_challenges_from_db()
-    logger.debug(get_challenges_json)
-    return str(get_challenges_json)
+    challenges = dboperator.get_challenges_from_db()
+    return json.dumps([{"challengename": challenge} for challenge in challenges])
 
 
 @app.route("/get_pods_namespace", methods=["GET"])
