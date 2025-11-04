@@ -4,11 +4,10 @@ FROM alpine:3.22
 COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /uvx /bin/
 
 # Install kubectl
-RUN apk add --no-cache curl
-
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
-RUN chmod +x ./kubectl
-RUN mv ./kubectl /usr/local/bin
+RUN apk add --no-cache curl && \
+  curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && \
+  chmod +x ./kubectl && \
+  mv ./kubectl /usr/local/bin
 
 # Install Python and OpenVPN
 RUN apk add --no-cache \
@@ -17,18 +16,23 @@ RUN apk add --no-cache \
     python3 \
     py3-pip
 
-
 # Kube config should be mounted on image start
 ENV KUBECONFIG=/.kube/config.yml
 
 # Copy over project files
 WORKDIR /app
-COPY ahaz_k8s_controller /app/ahaz_k8s_controller
-COPY ahaz_common /app/ahaz_common
+
+# Copy over pyproject.toml files first to leverage Docker layer caching
+COPY ahaz_k8s_controller/pyproject.toml /app/ahaz_k8s_controller/pyproject.toml
+COPY ahaz_common/pyproject.toml /app/ahaz_common/pyproject.toml
 COPY pyproject.toml /app/pyproject.toml
 
 # Make sure the environment has all the dependencies
 RUN uv sync --all-packages
+
+# Copy over the rest of the application code
+COPY ahaz_k8s_controller /app/ahaz_k8s_controller
+COPY ahaz_common /app/ahaz_common
 
 # Run the server
 CMD ["/bin/uv", "run", "/app/ahaz_k8s_controller/k8s_controller/server.py"]
