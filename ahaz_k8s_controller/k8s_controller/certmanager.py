@@ -12,6 +12,7 @@ from os import getenv, listdir, makedirs, path
 from shutil import rmtree
 from typing import Any, Generator
 
+import dboperator
 import requests
 import yaml
 
@@ -554,6 +555,14 @@ def get_client_ovpn_config(
     return "\n".join(config)
 
 
+def get_team_vpn_pod_port(team_id: str) -> int:
+    port_resp = dboperator.get_team_port(team_id)
+    if port_resp != "null":
+        return int(port_resp)
+    else:
+        return TEAM_PORT_RANGE_START + int(team_id) - 1
+
+
 def generate_user(team_id: str, user_id: str, teamVPNDirectory: str) -> str:
     easyrsa = obtain_easyrsa()
     if easyrsa is None:
@@ -573,7 +582,7 @@ def generate_user(team_id: str, user_id: str, teamVPNDirectory: str) -> str:
         user_id,
         path.join(teamVPNDirectory, "pki"),
         # HACK: make a better way of setting the port the client should connect to
-        ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
+        ovpn_port=get_team_vpn_pod_port(team_id),
     )
 
 
@@ -583,7 +592,7 @@ def get_user(team_id: str, user_id: str, teamVPNDirectory: str) -> str:
         user_id,
         path.join(teamVPNDirectory, "pki"),
         # HACK: make a better way of setting the port the client should connect to
-        ovpn_port=TEAM_PORT_RANGE_START + int(team_id) - 1,
+        ovpn_port=get_team_vpn_pod_port(team_id),
     )
 
 
