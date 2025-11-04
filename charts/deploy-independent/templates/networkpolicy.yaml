@@ -1,0 +1,74 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-namespace
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}  
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector: {} 
+  egress:
+  - to:
+    - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector: {}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# Allows connections with the outside world (internet); prevent local network access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: allow-external-egress
+    namespace: {{ .Release.Namespace }}
+spec:
+    podSelector: {}
+    policyTypes:
+    - Egress
+    egress:
+    - to:
+        - ipBlock:
+                cidr: 0.0.0.0/0
+                except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+---
+# Allow k8s controller pod to access the kubernetes service in the default namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+    name: allow-k8s-api-access
+    namespace: {{ .Release.Namespace }}
+spec:
+    podSelector:
+        matchLabels:
+          app.kubernetes.io/component: controller
+    policyTypes:
+    - Egress
+    egress:
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.kubernetes.k8sApiServiceCidr }}

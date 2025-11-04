@@ -63,3 +63,7 @@ kyverno:
 pullsecrets:
   name: "regcred"
   namespace: "ahaz-secrets"
+
+kubernetes:
+  k8sApiServiceCidr: "192.168.49.2/32"
+  k8sApiServicePort: 8443
