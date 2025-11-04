@@ -22,8 +22,6 @@ certDirLocationContainer = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
 # Quick heuristic to determine if the kube folder has a valid kubeconfig file
 # or merely a service account token.
-
-
 def is_valid_kubeconfig(kube_folder: str) -> bool:
     # Check for the presence of a valid kubeconfig file
     kubeconfig_path = os.path.join(kube_folder, "config")
@@ -45,6 +43,17 @@ def load_kube_config():
     else:
         config.load_incluster_config()
 
+_kube_config_loaded = False
+def ensure_kube_config_loaded():
+    global _kube_config_loaded
+    if not _kube_config_loaded:
+        try:
+            load_kube_config()
+        except Exception as e:
+            logger.error(f"Failed to load Kubernetes configuration: {e}")
+            raise e
+        
+        _kube_config_loaded = True
 
 def should_retry_request(exception):
     """Return True if the exception is an ApiException with a status worth retrying."""
@@ -71,8 +80,7 @@ retry_opts = {
 
 @retry(**retry_opts)
 def create_network_policy_deny_all(namespace: str) -> client.V1NetworkPolicy:
-    # Load kube config (for local development)
-    load_kube_config()
+    ensure_kube_config_loaded()
 
     try:
         policy = client.V1NetworkPolicy(
@@ -95,9 +103,7 @@ def create_network_policy_deny_all(namespace: str) -> client.V1NetworkPolicy:
 
 @retry(**retry_opts)
 def create_network_policy(namespace: str) -> client.V1NetworkPolicy:
-    # Load kube config (for local development)
-    # Te vajag consul sataisīt https://www.hashicorp.com/en/resources/service-discovery-with-consul-on-kubernetes
-    load_kube_config()
+    ensure_kube_config_loaded()
 
     try:
         policy = client.V1NetworkPolicy(
@@ -150,7 +156,7 @@ def start_challenge_pod(
     networklist: list[str],
     taskname: str,
 ) -> None:
-    load_kube_config()
+    ensure_kube_config_loaded()
     try:
         k8s_client = client.CoreV1Api()
         taskname = taskname.replace(" ", "-")
@@ -223,19 +229,28 @@ def start_challenge(teamname: str, challengename: str) -> int:
         raise e
 
 
-# TODO: Split this function up to reduce complexity
 # TODO: showInvisible should be a bool
 @retry(**retry_opts)
 def get_pods_namespace(teamname: str, showInvisible: int) -> str:
-    load_kube_config()
+    ensure_kube_config_loaded()
     try:
         k8s_client = client.CoreV1Api()
         pod_list = k8s_client.list_namespaced_pod(teamname)
         pod_info = []
-        pod_info_json = "["
-        first = True
         try:
             for pod in pod_list.items:
+                if "visible" in pod.metadata.labels:
+                    pod_visible = int(pod.metadata.labels["visible"])
+                else:
+                    if pod.metadata.name != "vpn-container-pod":
+                        logger.warning(
+                            f"Pod {pod.metadata.name} in namespace {teamname} missing 'visible' label."
+                        )
+                    pod_visible = 1  # default to visible if label is missing
+
+                if pod_visible != 1 and showInvisible != 1:
+                    continue
+
                 if pod.metadata.name == "vpn-container-pod":
                     if pod.metadata.deletion_timestamp is not None and pod.status.phase in (
                         "Pending",
@@ -244,117 +259,34 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
                         state = "Terminating"
                     else:
                         state = str(pod.status.phase)
-                    logger.debug("processing vpn container pod")
-                    current_pod_info_json = (
-                        '{"name":"'
-                        + pod.metadata.name
-                        + '","status":"'
-                        + state
-                        + '","ip":"'
-                        + pod.status.pod_ip
-                        + '"}'
+                    pod_info.append(
+                        {
+                            "name": pod.metadata.name,
+                            "status": state,
+                            "ip": pod.status.pod_ip,
+                        }
                     )
-                    if first:
-                        pod_info_json += current_pod_info_json
-                        first = False
-                    else:
-                        pod_info_json += "," + current_pod_info_json
                     continue
-                logger.debug("%s\t%s\t%s" % (pod.metadata.name, pod.status.phase, pod.status.pod_ip))
+
                 # because python k8s api does not show status terminating :/
                 if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
                     state = "Terminating"
                 else:
                     state = str(pod.status.phase)
-                pod_info.append([pod.metadata.name, state, pod.status.pod_ip])
-                current_pod_info_json = (
-                    '{"status":"'
-                    + state
-                    + '","ip":"'
-                    + pod.status.pod_ip
-                    + '","visibleIP":'
-                    + pod.metadata.labels["visible"]
-                    + ',"task":"'
-                    + dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
-                    + '","name":"'
-                    + pod.metadata.labels["name"]
-                    + '"'
-                    + "}"
-                )
-                logger.debug(current_pod_info_json)
-                if first:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += current_pod_info_json
-                        first = False
-                else:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += "," + current_pod_info_json
-            pod_info_json += "]"
-            return pod_info_json
-        # TODO: Fix this, or find a better way to handle it \/
-        # there is an issue that if I just start up a pod, and immediately request pod statuses
-        # it doesn't have an IP assigned yet, and that requires re requesting all pods to be loaded.
-        except Exception as e:
-            logger.error(f"Failed to get pod info: {e}")
-            time.sleep(3)
-            pod_list = k8s_client.list_namespaced_pod(teamname)
-            for pod in pod_list.items:
-                if pod.metadata.name == "vpn-container-pod":
-                    if pod.metadata.deletion_timestamp is not None and pod.status.phase in (
-                        "Pending",
-                        "Running",
-                    ):
-                        state = "Terminating"
-                    else:
-                        state = str(pod.status.phase)
-                    logger.debug("processing vpn container pod")
-                    current_pod_info_json = (
-                        '{"name":"'
-                        + pod.metadata.name
-                        + '","status":"'
-                        + state
-                        + '","ip":"'
-                        + pod.status.pod_ip
-                        + '"}'
-                    )
-                    if first:
-                        pod_info_json += current_pod_info_json
-                        first = False
-                    else:
-                        pod_info_json += "," + current_pod_info_json
-                    continue
-                logger.debug(
-                    "%s\t%s\t%s"
-                    % (
-                        pod.metadata.name,
-                        pod.status.phase,
-                        pod.status.pod_ip,
-                    )
-                )
-                # because python k8s api does not show status terminating :/
-                if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
-                    state = "Terminating"
-                else:
-                    state = str(pod.status.phase)
-                pod_info.append([pod.metadata.name, state, pod.status.pod_ip])
                 pod_data = {
-                    "name": pod.metadata.labels["name"],
                     "status": state,
                     "ip": pod.status.pod_ip,
-                    "visibleIP": int(pod.metadata.labels["visible"]),
+                    "visibleIP": pod_visible,
                     "task": dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"]),
+                    "name": pod.metadata.labels["name"],
                 }
-                current_pod_info_json = json.dumps(pod_data)
-                logger.debug(current_pod_info_json)
-                if first:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += current_pod_info_json
-                        first = False
-                else:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += "," + current_pod_info_json
-            pod_info_json += "]"
-            return pod_info_json
+
+                pod_info.append(pod_data)
+
+            return json.dumps(pod_info)
+        except Exception as e:
+            logger.error(f"Error processing pods in namespace {teamname}: {e}")
+            raise e
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when getting pods in namespace {teamname}: {e}")
@@ -363,8 +295,8 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
 
 @retry(**retry_opts)
 def create_pod_service(teamname: str, taskname: str, k8s_name: str) -> None:
+    ensure_kube_config_loaded()
     try:
-        load_kube_config()
         api_instance = client.CoreV1Api()
 
         service = client.V1Service(
@@ -399,10 +331,10 @@ def create_pod_service(teamname: str, taskname: str, k8s_name: str) -> None:
 
 @retry(**retry_opts)
 def create_network_policy_deny_all_task(teamname: str, challengename: str) -> client.V1NetworkPolicy:
+    ensure_kube_config_loaded()
     try:
         sanitized_challengename = challengename.replace(" ", "-").lower()
         taskname = challengename.replace(" ", "-")
-        load_kube_config()
 
         policy = client.V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
@@ -428,6 +360,7 @@ def create_network_policy_deny_all_task(teamname: str, challengename: str) -> cl
 def create_network_policy_allow_task(
     teamname: str, challengename: str, network_pods: list[str], netname: str
 ) -> client.V1NetworkPolicy:
+    ensure_kube_config_loaded()
     try:
         # Explicitly allow DNS
         dns_peer = client.V1NetworkPolicyPeer(
@@ -470,7 +403,7 @@ def create_network_policy_allow_task(
                 )
             ]
         )
-        load_kube_config()
+
         policy = client.V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
             kind="NetworkPolicy",
@@ -493,8 +426,8 @@ def create_network_policy_allow_task(
 
 @retry(**retry_opts)
 def create_challenge_network_policies(teamname: str, challengename: str) -> None:
+    ensure_kube_config_loaded()
     try:
-        load_kube_config()
         api = client.NetworkingV1Api()
         deny_policy = create_network_policy_deny_all_task(teamname, challengename)
         api.create_namespaced_network_policy(namespace=teamname, body=deny_policy)
@@ -522,9 +455,9 @@ def create_challenge_network_policies(teamname: str, challengename: str) -> None
 
 @retry(**retry_opts)
 def stop_challenge(teamname: str, task: str) -> str:
+    ensure_kube_config_loaded()
     try:
         task = task.replace(" ", "-")
-        load_kube_config()
 
         core_v1 = client.CoreV1Api()
         net_v1 = client.NetworkingV1Api()
@@ -558,8 +491,8 @@ def stop_challenge(teamname: str, task: str) -> str:
 
 @retry(**retry_opts)
 def create_secret_in_namespace(teamname: str, secret_data: dict) -> None:
+    ensure_kube_config_loaded()
     try:
-        load_kube_config()
         k8s_client = client.CoreV1Api()
         k8s_client.create_namespaced_secret(namespace=teamname, body=secret_data)
         logger.debug(f"Created secret {secret_data['name']} in namespace {teamname}")
@@ -572,8 +505,8 @@ def create_secret_in_namespace(teamname: str, secret_data: dict) -> None:
 # old functions from old controller
 @retry(**retry_opts)
 def create_team_namespace(teamname: str) -> None:
+    ensure_kube_config_loaded()
     try:
-        load_kube_config()
         k8s_client = client.CoreV1Api()
         try:
             k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
@@ -594,8 +527,8 @@ def create_team_namespace(teamname: str) -> None:
 
 @retry(**retry_opts)
 def create_team_vpn_configmap(teamname):
+    ensure_kube_config_loaded()
     try:
-        load_kube_config()
         k8s_client = client.CoreV1Api()
         teamCertDir = certDirLocationContainer + teamname
 
@@ -634,9 +567,9 @@ def create_team_vpn_configmap(teamname):
 
 @retry(**retry_opts)
 def create_team_vpn_container(teamname: str) -> None:
+    ensure_kube_config_loaded()
     try:
         create_team_vpn_configmap(teamname)
-        load_kube_config()
         k8s_client = client.CoreV1Api()
         pod_manifest = {
             "apiVersion": "v1",
@@ -693,6 +626,7 @@ def create_team_vpn_container(teamname: str) -> None:
 
 @retry(**retry_opts)
 def expose_team_vpn_container(teamname: str, externalport: int) -> None:
+    ensure_kube_config_loaded()
     try:
         logger.debug("about to expose team vpn container")
         k8s_client = client.CoreV1Api()
@@ -748,7 +682,7 @@ def obtain_user_ovpn_config(teamname: str, username: str) -> str:
 
 
 def delete_namespace(teamname: str, timeout: int = 300, interval: int = 5) -> int:
-    load_kube_config()
+    ensure_kube_config_loaded()
     try:
         k8s_client = client.CoreV1Api()
         try:
