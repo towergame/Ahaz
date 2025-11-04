@@ -22,17 +22,12 @@ ENV KUBECONFIG=/.kube/config.yml
 # Copy over project files
 WORKDIR /app
 
-# Copy over pyproject.toml files first to leverage Docker layer caching
-COPY ahaz_k8s_controller/pyproject.toml /app/ahaz_k8s_controller/pyproject.toml
-COPY ahaz_common/pyproject.toml /app/ahaz_common/pyproject.toml
+COPY ahaz_k8s_controller /app/ahaz_k8s_controller
+COPY ahaz_common /app/ahaz_common
 COPY pyproject.toml /app/pyproject.toml
 
 # Make sure the environment has all the dependencies
 RUN uv sync --all-packages
-
-# Copy over the rest of the application code
-COPY ahaz_k8s_controller /app/ahaz_k8s_controller
-COPY ahaz_common /app/ahaz_common
 
 # Run the server
 CMD ["/bin/uv", "run", "/app/ahaz_k8s_controller/k8s_controller/server.py"]
