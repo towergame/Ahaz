@@ -1,5 +1,7 @@
 echo "** Creating default DB and users"
 
+# FIXME: Better names, add indexes, primary keys, relations and constraints
+# TODO: Extract this out into a sql file, add migrations
 mysql -u root -p$MYSQL_ROOT_PASSWORD --execute \
 "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 use $MYSQL_DATABASE;

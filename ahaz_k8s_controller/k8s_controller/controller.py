@@ -20,6 +20,7 @@ K8S_IMAGEPULLSECRET_NAMESPACE = os.getenv("K8S_IMAGEPULLSECRET_NAMESPACE", "defa
 K8S_IMAGEPULLSECRET_NAME = os.getenv("K8S_IMAGEPULLSECRET_NAME", "regcred")
 certDirLocationContainer = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
 
+
 # Quick heuristic to determine if the kube folder has a valid kubeconfig file
 # or merely a service account token.
 def is_valid_kubeconfig(kube_folder: str) -> bool:
@@ -43,7 +44,10 @@ def load_kube_config():
     else:
         config.load_incluster_config()
 
+
 _kube_config_loaded = False
+
+
 def ensure_kube_config_loaded():
     global _kube_config_loaded
     if not _kube_config_loaded:
@@ -52,8 +56,9 @@ def ensure_kube_config_loaded():
         except Exception as e:
             logger.error(f"Failed to load Kubernetes configuration: {e}")
             raise e
-        
+
         _kube_config_loaded = True
+
 
 def should_retry_request(exception):
     """Return True if the exception is an ApiException with a status worth retrying."""
@@ -162,7 +167,7 @@ def start_challenge_pod(
         taskname = taskname.replace(" ", "-")
         storage = storage.replace("Gb", "Gi")
         ram = ram.replace("Gb", "Gi")
-        env_vars = dboperator.cicd_get_env_vars(k8s_name)
+        env_vars = dboperator.get_env_vars(k8s_name)
         pod_manifest = {
             "apiVersion": "v1",
             "kind": "Pod",
@@ -208,13 +213,13 @@ def start_challenge_pod(
 def start_challenge(teamname: str, challengename: str) -> int:
     try:
         logger.debug(" a")
-        db_pods_data = dboperator.cicd_get_pods(challengename)
+        db_pods_data = dboperator.get_pods(challengename)
         for i in db_pods_data:
             logger.debug(i)
             k8s_name, image, ram, cpu, visible_to_user = i[1:]
             # =
             storage = "2Gb"
-            netnames = dboperator.cicd_get_k8s_name_networks(k8s_name)
+            netnames = dboperator.get_k8s_name_networks(k8s_name)
             networklist = []
             for i in netnames:
                 networklist.append(i.replace("teamnet", teamname))
@@ -277,7 +282,7 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
                     "status": state,
                     "ip": pod.status.pod_ip,
                     "visibleIP": pod_visible,
-                    "task": dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"]),
+                    "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"]),
                     "name": pod.metadata.labels["name"],
                 }
 
@@ -431,20 +436,14 @@ def create_challenge_network_policies(teamname: str, challengename: str) -> None
         api = client.NetworkingV1Api()
         deny_policy = create_network_policy_deny_all_task(teamname, challengename)
         api.create_namespaced_network_policy(namespace=teamname, body=deny_policy)
-        networklist = dboperator.cicd_get_unique_networks(challengename)
-        for i in networklist:  # understand all networks that will need to be created
-            # print(i[0])
-            temp_network_pods = dboperator.cicd_get_pods_in_network(challengename, i[0])
-            network_pods = []
-            netname = i[0]
-            for j in temp_network_pods:  # understand all pods that will be present in the network
-                network_pods.append(j[0])
-            if i[0] == "teamnet":  # if it is teamnet, include the vpn pod in whitelist
+        networklist = dboperator.get_unique_networks(challengename)
+        for netname in networklist:  # understand all networks that will need to be created
+            temp_network_pods = dboperator.get_pods_in_network(challengename, netname)
+            network_pods = [x for x in temp_network_pods]  # make a copy
+            if netname == "teamnet":  # if it is teamnet, include the vpn pod in whitelist
                 network_pods.append("vpn-container-pod")
                 netname = netname + "-" + "".join(char for char in challengename.lower())
                 netname = netname.replace(" ", "-")
-            logger.debug(network_pods)
-            logger.debug(i[0] + "-" + "".join(char for char in challengename.lower() if char.isalpha()))
             allow_policy = create_network_policy_allow_task(teamname, challengename, network_pods, netname)
             api.create_namespaced_network_policy(namespace=teamname, body=allow_policy)
     except ApiException as e:
