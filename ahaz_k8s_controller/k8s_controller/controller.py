@@ -223,7 +223,6 @@ def start_challenge(teamname: str, challengename: str) -> int:
         raise e
 
 
-# TODO: Split this function up to reduce complexity
 # TODO: showInvisible should be a bool
 @retry(**retry_opts)
 def get_pods_namespace(teamname: str, showInvisible: int) -> str:
@@ -232,10 +231,20 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
         k8s_client = client.CoreV1Api()
         pod_list = k8s_client.list_namespaced_pod(teamname)
         pod_info = []
-        pod_info_json = "["
-        first = True
         try:
             for pod in pod_list.items:
+                if "visible" in pod.metadata.labels:
+                    pod_visible = int(pod.metadata.labels["visible"])
+                else:
+                    if pod.metadata.name != "vpn-container-pod":
+                        logger.warning(
+                            f"Pod {pod.metadata.name} in namespace {teamname} missing 'visible' label."
+                        )
+                    pod_visible = 1  # default to visible if label is missing
+
+                if pod_visible != 1 and showInvisible != 1:
+                    continue
+
                 if pod.metadata.name == "vpn-container-pod":
                     if pod.metadata.deletion_timestamp is not None and pod.status.phase in (
                         "Pending",
@@ -244,117 +253,34 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
                         state = "Terminating"
                     else:
                         state = str(pod.status.phase)
-                    logger.debug("processing vpn container pod")
-                    current_pod_info_json = (
-                        '{"name":"'
-                        + pod.metadata.name
-                        + '","status":"'
-                        + state
-                        + '","ip":"'
-                        + pod.status.pod_ip
-                        + '"}'
+                    pod_info.append(
+                        {
+                            "name": pod.metadata.name,
+                            "status": state,
+                            "ip": pod.status.pod_ip,
+                        }
                     )
-                    if first:
-                        pod_info_json += current_pod_info_json
-                        first = False
-                    else:
-                        pod_info_json += "," + current_pod_info_json
                     continue
-                logger.debug("%s\t%s\t%s" % (pod.metadata.name, pod.status.phase, pod.status.pod_ip))
+
                 # because python k8s api does not show status terminating :/
                 if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
                     state = "Terminating"
                 else:
                     state = str(pod.status.phase)
-                pod_info.append([pod.metadata.name, state, pod.status.pod_ip])
-                current_pod_info_json = (
-                    '{"status":"'
-                    + state
-                    + '","ip":"'
-                    + pod.status.pod_ip
-                    + '","visibleIP":'
-                    + pod.metadata.labels["visible"]
-                    + ',"task":"'
-                    + dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"])
-                    + '","name":"'
-                    + pod.metadata.labels["name"]
-                    + '"'
-                    + "}"
-                )
-                logger.debug(current_pod_info_json)
-                if first:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += current_pod_info_json
-                        first = False
-                else:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += "," + current_pod_info_json
-            pod_info_json += "]"
-            return pod_info_json
-        # TODO: Fix this, or find a better way to handle it \/
-        # there is an issue that if I just start up a pod, and immediately request pod statuses
-        # it doesn't have an IP assigned yet, and that requires re requesting all pods to be loaded.
-        except Exception as e:
-            logger.error(f"Failed to get pod info: {e}")
-            time.sleep(3)
-            pod_list = k8s_client.list_namespaced_pod(teamname)
-            for pod in pod_list.items:
-                if pod.metadata.name == "vpn-container-pod":
-                    if pod.metadata.deletion_timestamp is not None and pod.status.phase in (
-                        "Pending",
-                        "Running",
-                    ):
-                        state = "Terminating"
-                    else:
-                        state = str(pod.status.phase)
-                    logger.debug("processing vpn container pod")
-                    current_pod_info_json = (
-                        '{"name":"'
-                        + pod.metadata.name
-                        + '","status":"'
-                        + state
-                        + '","ip":"'
-                        + pod.status.pod_ip
-                        + '"}'
-                    )
-                    if first:
-                        pod_info_json += current_pod_info_json
-                        first = False
-                    else:
-                        pod_info_json += "," + current_pod_info_json
-                    continue
-                logger.debug(
-                    "%s\t%s\t%s"
-                    % (
-                        pod.metadata.name,
-                        pod.status.phase,
-                        pod.status.pod_ip,
-                    )
-                )
-                # because python k8s api does not show status terminating :/
-                if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
-                    state = "Terminating"
-                else:
-                    state = str(pod.status.phase)
-                pod_info.append([pod.metadata.name, state, pod.status.pod_ip])
                 pod_data = {
-                    "name": pod.metadata.labels["name"],
                     "status": state,
                     "ip": pod.status.pod_ip,
-                    "visibleIP": int(pod.metadata.labels["visible"]),
+                    "visibleIP": pod_visible,
                     "task": dboperator.cicd_get_challenge_from_k8s_name(pod.metadata.labels["name"]),
+                    "name": pod.metadata.labels["name"],
                 }
-                current_pod_info_json = json.dumps(pod_data)
-                logger.debug(current_pod_info_json)
-                if first:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += current_pod_info_json
-                        first = False
-                else:
-                    if ('"visibleIP":1' in current_pod_info_json) or (showInvisible == 1):
-                        pod_info_json += "," + current_pod_info_json
-            pod_info_json += "]"
-            return pod_info_json
+
+                pod_info.append(pod_data)
+
+            return json.dumps(pod_info)
+        except Exception as e:
+            logger.error(f"Error processing pods in namespace {teamname}: {e}")
+            raise e
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when getting pods in namespace {teamname}: {e}")
