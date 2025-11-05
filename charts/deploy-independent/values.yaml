@@ -4,7 +4,7 @@ controller:
     managedByLabelValue: "k8s-controller"
 
   image:
-    repository: "localhost:5000/martina-ctf/ahaz_k8s_controller"
+    repository: "registry.drydock.vpn/martina-ctf/ahaz_k8s_controller"
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
     tag: "latest"
@@ -17,8 +17,8 @@ controller:
     kubeconfig:
       # secretName: my-kubeconfig-secret # Optional: defaults to <fullname>-kubeconfig
 
-  publicDomainName: "ctf.example.lan"
-  k8sIpRange: "10.244.0.0/24"
+  publicDomainName: "ahaz.drydock.vpn"
+  k8sIpRange: "10.42.0.0/16"
   teamPortRangeStart: 30000
   teamBackupPortRangeStart: 25000
   teamBackupPortRangeEnd: 29999
@@ -65,5 +65,5 @@ pullsecrets:
   namespace: "ahaz-secrets"
 
 kubernetes:
-  k8sApiServiceCidr: "192.168.49.2/32"
-  k8sApiServicePort: 8443
+  k8sApiServiceCidr: "10.6.7.0/32"
+  k8sApiServicePort: 6443
