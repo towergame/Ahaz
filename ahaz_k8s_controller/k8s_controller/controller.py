@@ -489,15 +489,38 @@ def stop_challenge(teamname: str, task: str) -> str:
 
 
 @retry(**retry_opts)
-def create_secret_in_namespace(teamname: str, secret_data: dict) -> None:
+def create_secret_in_namespace(teamname: str, secret_data: client.V1Secret) -> None:
     ensure_kube_config_loaded()
     try:
         k8s_client = client.CoreV1Api()
         k8s_client.create_namespaced_secret(namespace=teamname, body=secret_data)
-        logger.debug(f"Created secret {secret_data['name']} in namespace {teamname}")
+        logger.debug(f"Created secret {secret_data.metadata.name} in namespace {teamname}")  # type: ignore
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when creating secret in namespace {teamname}: {e}")
+        else:
+            logger.debug(f"API Exception when creating secret in namespace {teamname}: {e}")
+        raise e
+
+
+@retry(**retry_opts)
+def patch_namespaced_service_account(
+    namespace: str, service_account_name: str, body: client.V1ServiceAccount
+) -> None:
+    ensure_kube_config_loaded()
+    try:
+        k8s_client = client.CoreV1Api()
+        k8s_client.patch_namespaced_service_account(name=service_account_name, namespace=namespace, body=body)
+        logger.debug(f"Patched service account {service_account_name} in namespace {namespace}")
+    except ApiException as e:
+        if e.status != 403:
+            logger.error(
+                f"API Exception when patching service account {service_account_name} in namespace {namespace}: {e}"
+            )
+        else:
+            logger.debug(
+                f"API Exception when patching service account {service_account_name} in namespace {namespace}: {e}"
+            )
         raise e
 
 
@@ -507,20 +530,28 @@ def create_team_namespace(teamname: str) -> None:
     ensure_kube_config_loaded()
     try:
         k8s_client = client.CoreV1Api()
-        try:
-            k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
-            logger.debug(f"moving regcred to namespace {teamname}")
-            regcred = k8s_client.read_namespaced_secret(
-                name=K8S_IMAGEPULLSECRET_NAME, namespace=K8S_IMAGEPULLSECRET_NAMESPACE
-            )
-            regcred.metadata.namespace = teamname  # type: ignore
-            regcred.metadata.resource_version = None  # type: ignore
-            create_secret_in_namespace(teamname, regcred)  # type: ignore
-        except Exception as e:
-            logger.error(f"Error creating namespace {teamname}: {e}")
+        k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
+        logger.debug(f"moving regcred to namespace {teamname}")
+        regcred: client.V1Secret = k8s_client.read_namespaced_secret(
+            name=K8S_IMAGEPULLSECRET_NAME, namespace=K8S_IMAGEPULLSECRET_NAMESPACE
+        )  # type: ignore
+        regcred.metadata.namespace = teamname  # type: ignore
+        regcred.metadata.resource_version = None  # type: ignore
+        create_secret_in_namespace(teamname, regcred)  # type: ignore
+        # patch the default service account to disallow auto-mounting of the token
+        patch_namespaced_service_account(
+            namespace=teamname,
+            service_account_name="default",
+            body=client.V1ServiceAccount(automount_service_account_token=False),
+        )
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when creating namespace {teamname}: {e}")
+        else:
+            logger.debug(f"API Exception when creating namespace {teamname}: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"General Exception when creating namespace {teamname}: {e}")
         raise e
 
 
