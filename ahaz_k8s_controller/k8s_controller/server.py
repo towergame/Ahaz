@@ -97,7 +97,7 @@ def get_pods_namespace():
         return "Invalid request data", 400
 
     logger.info(f"Getting pods for team {request_data.team_id}")
-    podresult = controller.get_pods_namespace(str(request_data.team_id), 0)
+    podresult = controller.get_pods_namespace(str(request_data.team_id), False)
     logger.debug(f"Pods for team {request_data.team_id}:\n{podresult}")
     return podresult
 
