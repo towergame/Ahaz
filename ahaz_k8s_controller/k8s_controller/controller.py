@@ -5,7 +5,39 @@ import time
 
 import certmanager
 import dboperator
-from kubernetes import client, config
+from kubernetes import config
+from kubernetes.client import (
+    CoreV1Api,
+    NetworkingV1Api,
+    V1Capabilities,
+    V1ConfigMap,
+    V1ConfigMapVolumeSource,
+    V1Container,
+    V1EnvVar,
+    V1HostPathVolumeSource,
+    V1KeyToPath,
+    V1LabelSelector,
+    V1LabelSelectorRequirement,
+    V1Namespace,
+    V1NetworkPolicy,
+    V1NetworkPolicyEgressRule,
+    V1NetworkPolicyIngressRule,
+    V1NetworkPolicyPeer,
+    V1NetworkPolicyPort,
+    V1NetworkPolicySpec,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodList,
+    V1PodSpec,
+    V1Secret,
+    V1SecurityContext,
+    V1Service,
+    V1ServiceAccount,
+    V1ServicePort,
+    V1ServiceSpec,
+    V1Volume,
+    V1VolumeMount,
+)
 from kubernetes.client.rest import ApiException
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
@@ -84,16 +116,16 @@ retry_opts = {
 
 
 @retry(**retry_opts)
-def create_network_policy_deny_all(namespace: str) -> client.V1NetworkPolicy:
+def create_network_policy_deny_all(namespace: str) -> V1NetworkPolicy:
     ensure_kube_config_loaded()
 
     try:
-        policy = client.V1NetworkPolicy(
+        policy = V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
             kind="NetworkPolicy",
-            metadata=client.V1ObjectMeta(name="deny-all"),
-            spec=client.V1NetworkPolicySpec(
-                pod_selector=client.V1LabelSelector(match_labels={}),
+            metadata=V1ObjectMeta(name="deny-all"),
+            spec=V1NetworkPolicySpec(
+                pod_selector=V1LabelSelector(match_labels={}),
                 policy_types=["Ingress", "Egress"],
                 ingress=[],
                 egress=[],
@@ -107,36 +139,34 @@ def create_network_policy_deny_all(namespace: str) -> client.V1NetworkPolicy:
 
 
 @retry(**retry_opts)
-def create_network_policy(namespace: str) -> client.V1NetworkPolicy:
+def create_network_policy(namespace: str) -> V1NetworkPolicy:
     ensure_kube_config_loaded()
 
     try:
-        policy = client.V1NetworkPolicy(
+        policy = V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
             kind="NetworkPolicy",
-            metadata=client.V1ObjectMeta(name="restrict-vpn-access"),
-            spec=client.V1NetworkPolicySpec(
-                pod_selector=client.V1LabelSelector(match_labels={"name": "vpn-container-pod"}),
+            metadata=V1ObjectMeta(name="restrict-vpn-access"),
+            spec=V1NetworkPolicySpec(
+                pod_selector=V1LabelSelector(match_labels={"name": "vpn-container-pod"}),
                 policy_types=["Ingress", "Egress"],
                 ingress=[
-                    client.V1NetworkPolicyIngressRule(
+                    V1NetworkPolicyIngressRule(
                         ports=[
-                            client.V1NetworkPolicyPort(protocol="TCP", port=1194),
-                            client.V1NetworkPolicyPort(protocol="UDP", port=1194),
+                            V1NetworkPolicyPort(protocol="TCP", port=1194),
+                            V1NetworkPolicyPort(protocol="UDP", port=1194),
                         ]
                     )
                 ],
                 egress=[
                     # Explicitly deny all egress traffic by default
-                    # client.V1NetworkPolicyEgressRule(to=[]),
                     # Allow communication only within the same namespace
-                    client.V1NetworkPolicyEgressRule(
+                    V1NetworkPolicyEgressRule(
                         to=[
-                            client.V1NetworkPolicyPeer(
-                                pod_selector=client.V1LabelSelector(match_labels={"team": namespace})
+                            V1NetworkPolicyPeer(
+                                pod_selector=V1LabelSelector(match_labels={"team": namespace})
                             )
                         ]
-                        # to=[client.V1NetworkPolicyPeer(pod_selector=client.V1LabelSelector(match_labels={}))]
                     )
                 ],
             ),
@@ -158,22 +188,21 @@ def start_challenge_pod(
     cpu: str,
     storage: str,
     visible_to_user: bool,
-    networklist: list[str],
+    networklist: list[str],  # FIXME: Is this used?
     taskname: str,
 ) -> None:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
+        core_api = CoreV1Api()
         taskname = taskname.replace(" ", "-")
+        # FIXME: Gb and Gi are not strictly equivalent!
         storage = storage.replace("Gb", "Gi")
         ram = ram.replace("Gb", "Gi")
         env_vars = dboperator.get_env_vars(k8s_name)
-        pod_manifest = {
-            "apiVersion": "v1",
-            "kind": "Pod",
-            "metadata": {
-                "name": k8s_name,
-                "labels": {
+        pod_manifest = V1Pod(
+            metadata=V1ObjectMeta(
+                name=k8s_name,
+                labels={
                     "team": teamname,
                     "visible": str(
                         visible_to_user
@@ -181,27 +210,29 @@ def start_challenge_pod(
                     "task": taskname,  # identifies the task this pod belongs to, necessary for network policies
                     "name": k8s_name,  # used for service selector
                 },
-            },
-            "spec": {
-                "containers": [
-                    {
-                        "image": image,
-                        "name": "container",
-                        "env": env_vars,
-                        #'resources':{
+            ),
+            spec=V1PodSpec(
+                containers=[
+                    V1Container(
+                        image=image,
+                        name="container",
+                        env=[V1EnvVar(name=var["name"], value=var["value"]) for var in env_vars],
+                        # TODO: Apply resource limits
+                        # 'resources':{
                         #    'limits':{
                         #        'memory':ram,
                         #        'cpu':str(cpu),
                         #        'ephemeral-storage':storage
                         #    }
                         # }
-                    }
+                    )
                 ],
-                "imagePullSecrets": [{"name": K8S_IMAGEPULLSECRET_NAME}],
-            },
-        }
-        logger.debug(pod_manifest)
-        k8s_client.create_namespaced_pod(namespace=teamname, body=pod_manifest)
+                image_pull_secrets=[{"name": K8S_IMAGEPULLSECRET_NAME}],
+            ),
+        )
+        logger.debug(f"Creating pod {k8s_name} in namespace {teamname} with image {image}")
+        logger.debug(f"Pod manifest: {pod_manifest}")
+        core_api.create_namespaced_pod(namespace=teamname, body=pod_manifest)
         create_pod_service(teamname, taskname, k8s_name)
     except ApiException as e:
         if e.status != 403:
@@ -212,12 +243,10 @@ def start_challenge_pod(
 @retry(**retry_opts)
 def start_challenge(teamname: str, challengename: str) -> int:
     try:
-        logger.debug(" a")
+        logger.info(f"Starting challenge {challengename} for team {teamname}")
         db_pods_data = dboperator.get_pods(challengename)
         for i in db_pods_data:
-            logger.debug(i)
             k8s_name, image, ram, cpu, visible_to_user = i[1:]
-            # =
             storage = "2Gb"
             netnames = dboperator.get_k8s_name_networks(k8s_name)
             networklist = []
@@ -239,11 +268,25 @@ def start_challenge(teamname: str, challengename: str) -> int:
 def get_pods_namespace(teamname: str, showInvisible: int) -> str:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
-        pod_list = k8s_client.list_namespaced_pod(teamname)
+        core_api = CoreV1Api()
+        pod_list: V1PodList = core_api.list_namespaced_pod(teamname)
+        if not pod_list.items:
+            return json.dumps([])
         pod_info = []
         try:
             for pod in pod_list.items:
+                pod = pod  # type: V1Pod
+
+                # Test whether we have all the values we expect
+                if not pod.metadata:
+                    logger.warning(f"Pod in namespace {teamname} is missing metadata.")
+                    continue
+
+                if pod.status is None:
+                    logger.warning(f"Pod {pod.metadata.name} in namespace {teamname} has no status.")
+                    continue
+
+                # Test if pod is visible
                 if "visible" in pod.metadata.labels:
                     pod_visible = int(pod.metadata.labels["visible"])
                 else:
@@ -256,34 +299,23 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
                 if pod_visible != 1 and showInvisible != 1:
                     continue
 
-                if pod.metadata.name == "vpn-container-pod":
-                    if pod.metadata.deletion_timestamp is not None and pod.status.phase in (
-                        "Pending",
-                        "Running",
-                    ):
-                        state = "Terminating"
-                    else:
-                        state = str(pod.status.phase)
-                    pod_info.append(
-                        {
-                            "name": pod.metadata.name,
-                            "status": state,
-                            "ip": pod.status.pod_ip,
-                        }
-                    )
-                    continue
+                # Get pod status
+                is_vpn = pod.metadata.name == "vpn-container-pod"
 
                 # because python k8s api does not show status terminating :/
                 if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
                     state = "Terminating"
                 else:
                     state = str(pod.status.phase)
+
                 pod_data = {
                     "status": state,
                     "ip": pod.status.pod_ip,
                     "visibleIP": pod_visible,
-                    "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"]),
-                    "name": pod.metadata.labels["name"],
+                    "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"])
+                    if is_vpn
+                    else None,
+                    "name": pod.metadata.labels["name"] if is_vpn else None,
                 }
 
                 pod_info.append(pod_data)
@@ -302,21 +334,19 @@ def get_pods_namespace(teamname: str, showInvisible: int) -> str:
 def create_pod_service(teamname: str, taskname: str, k8s_name: str) -> None:
     ensure_kube_config_loaded()
     try:
-        api_instance = client.CoreV1Api()
+        core_api = CoreV1Api()
 
-        service = client.V1Service(
-            api_version="v1",
-            kind="Service",
-            metadata=client.V1ObjectMeta(
-                name=k8s_name,  # could also be f"{challengename}-service"
+        service = V1Service(
+            metadata=V1ObjectMeta(
+                name=k8s_name,  # FIXME: (which one?) could also be f"{challengename}-service"
                 namespace=teamname,
                 labels={"task": taskname},
             ),
-            spec=client.V1ServiceSpec(
+            spec=V1ServiceSpec(
                 cluster_ip="None",  # headless service
                 selector={"name": k8s_name},
                 # ports=[
-                #    client.V1ServicePort(
+                #    V1ServicePort(
                 #        protocol="TCP",
                 #        port=0,
                 #        target_port=0
@@ -326,29 +356,30 @@ def create_pod_service(teamname: str, taskname: str, k8s_name: str) -> None:
         )
 
         # Create the service in Kubernetes
-        api_response = api_instance.create_namespaced_service(namespace=teamname, body=service)
-        logger.debug(f"Service created. Status='{api_response.status}'")  # type: ignore
+        api_response: V1Service = core_api.create_namespaced_service(namespace=teamname, body=service)  # type: ignore
+        logger.debug(f"Service created. Status='{api_response.status}'")
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when creating service for pod {k8s_name}: {e}")
         raise e
 
 
+# FIXME: Is teamname used?
 @retry(**retry_opts)
-def create_network_policy_deny_all_task(teamname: str, challengename: str) -> client.V1NetworkPolicy:
+def create_network_policy_deny_all_task(teamname: str, challengename: str) -> V1NetworkPolicy:
     ensure_kube_config_loaded()
     try:
         sanitized_challengename = challengename.replace(" ", "-").lower()
         taskname = challengename.replace(" ", "-")
 
-        policy = client.V1NetworkPolicy(
+        policy = V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
             kind="NetworkPolicy",
-            metadata=client.V1ObjectMeta(
+            metadata=V1ObjectMeta(
                 name="deny-all-" + sanitized_challengename, labels={"task": challengename.replace(" ", "-")}
             ),
-            spec=client.V1NetworkPolicySpec(
-                pod_selector=client.V1LabelSelector(match_labels={"task": taskname}),
+            spec=V1NetworkPolicySpec(
+                pod_selector=V1LabelSelector(match_labels={"task": taskname}),
                 policy_types=["Ingress", "Egress"],
                 ingress=[],
                 egress=[],
@@ -364,44 +395,38 @@ def create_network_policy_deny_all_task(teamname: str, challengename: str) -> cl
 @retry(**retry_opts)
 def create_network_policy_allow_task(
     teamname: str, challengename: str, network_pods: list[str], netname: str
-) -> client.V1NetworkPolicy:
+) -> V1NetworkPolicy:
     ensure_kube_config_loaded()
     try:
         # Explicitly allow DNS
-        dns_peer = client.V1NetworkPolicyPeer(
-            namespace_selector=client.V1LabelSelector(
-                match_labels={"kubernetes.io/metadata.name": "kube-system"}
-            ),
-            pod_selector=client.V1LabelSelector(match_labels={"k8s-app": "kube-dns"}),
+        dns_peer = V1NetworkPolicyPeer(
+            namespace_selector=V1LabelSelector(match_labels={"kubernetes.io/metadata.name": "kube-system"}),
+            pod_selector=V1LabelSelector(match_labels={"k8s-app": "kube-dns"}),
         )
-        dns_egress_rule = client.V1NetworkPolicyEgressRule(
+        dns_egress_rule = V1NetworkPolicyEgressRule(
             to=[dns_peer],
             ports=[
-                client.V1NetworkPolicyPort(protocol="UDP", port=53),
-                client.V1NetworkPolicyPort(protocol="TCP", port=53),
+                V1NetworkPolicyPort(protocol="UDP", port=53),
+                V1NetworkPolicyPort(protocol="TCP", port=53),
             ],
         )
         # Explicitly allow the pods within the network
-        pod_selector = client.V1LabelSelector(
-            match_expressions=[
-                client.V1LabelSelectorRequirement(key="name", operator="In", values=network_pods)
-            ]
+        pod_selector = V1LabelSelector(
+            match_expressions=[V1LabelSelectorRequirement(key="name", operator="In", values=network_pods)]
         )
 
-        peer_selector = client.V1NetworkPolicyPeer(
-            pod_selector=client.V1LabelSelector(
-                match_expressions=[
-                    client.V1LabelSelectorRequirement(key="name", operator="In", values=network_pods)
-                ]
+        peer_selector = V1NetworkPolicyPeer(
+            pod_selector=V1LabelSelector(
+                match_expressions=[V1LabelSelectorRequirement(key="name", operator="In", values=network_pods)]
             )
         )
 
-        ingress_rule = client.V1NetworkPolicyIngressRule(_from=[peer_selector])
-        egress_rule = client.V1NetworkPolicyEgressRule(to=[peer_selector])
+        ingress_rule = V1NetworkPolicyIngressRule(_from=[peer_selector])
+        egress_rule = V1NetworkPolicyEgressRule(to=[peer_selector])
 
-        pod_selector = client.V1LabelSelector(
+        pod_selector = V1LabelSelector(
             match_expressions=[
-                client.V1LabelSelectorRequirement(
+                V1LabelSelectorRequirement(
                     key="name",
                     operator="In",
                     values=network_pods,  # your array of pod names
@@ -409,13 +434,13 @@ def create_network_policy_allow_task(
             ]
         )
 
-        policy = client.V1NetworkPolicy(
+        policy = V1NetworkPolicy(
             api_version="networking.k8s.io/v1",
             kind="NetworkPolicy",
-            metadata=client.V1ObjectMeta(
+            metadata=V1ObjectMeta(
                 name="allow-all-" + netname, labels={"task": challengename.replace(" ", "-")}
             ),
-            spec=client.V1NetworkPolicySpec(
+            spec=V1NetworkPolicySpec(
                 pod_selector=pod_selector,
                 policy_types=["Ingress", "Egress"],
                 ingress=[ingress_rule],
@@ -433,19 +458,22 @@ def create_network_policy_allow_task(
 def create_challenge_network_policies(teamname: str, challengename: str) -> None:
     ensure_kube_config_loaded()
     try:
-        api = client.NetworkingV1Api()
+        net_api = NetworkingV1Api()
         deny_policy = create_network_policy_deny_all_task(teamname, challengename)
-        api.create_namespaced_network_policy(namespace=teamname, body=deny_policy)
+        net_api.create_namespaced_network_policy(namespace=teamname, body=deny_policy)
+
         networklist = dboperator.get_unique_networks(challengename)
         for netname in networklist:  # understand all networks that will need to be created
             temp_network_pods = dboperator.get_pods_in_network(challengename, netname)
             network_pods = [x for x in temp_network_pods]  # make a copy
+
             if netname == "teamnet":  # if it is teamnet, include the vpn pod in whitelist
                 network_pods.append("vpn-container-pod")
                 netname = netname + "-" + "".join(char for char in challengename.lower())
                 netname = netname.replace(" ", "-")
+
             allow_policy = create_network_policy_allow_task(teamname, challengename, network_pods, netname)
-            api.create_namespaced_network_policy(namespace=teamname, body=allow_policy)
+            net_api.create_namespaced_network_policy(namespace=teamname, body=allow_policy)
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when creating challenge network policies for {challengename}: {e}")
@@ -458,28 +486,37 @@ def stop_challenge(teamname: str, task: str) -> str:
     try:
         task = task.replace(" ", "-")
 
-        core_v1 = client.CoreV1Api()
-        net_v1 = client.NetworkingV1Api()
+        core_api = CoreV1Api()
+        net_api = NetworkingV1Api()
 
         label_selector = f"task={task}"
 
         # Delete Pods
-        pods = core_v1.list_namespaced_pod(namespace=teamname, label_selector=label_selector)
-        for pod in pods.items:
-            logger.debug(f"Deleting Pod: {pod.metadata.name}")
-            core_v1.delete_namespaced_pod(name=pod.metadata.name, namespace=teamname)
+        pod_list: V1PodList = core_api.list_namespaced_pod(namespace=teamname, label_selector=label_selector)
+
+        if not pod_list.items:
+            logger.info(f"No pods found with label task={task} in namespace {teamname}")
+        else:
+            for pod in pod_list.items:
+                pod = pod  # type: V1Pod
+                if not pod.metadata:
+                    logger.warning(f"Pod in namespace {teamname} is missing metadata.")
+                    continue
+                logger.debug(f"Deleting Pod: {pod.metadata.name}")
+                core_api.delete_namespaced_pod(name=pod.metadata.name, namespace=teamname)
 
         # Delete Services
-        services = core_v1.list_namespaced_service(namespace=teamname, label_selector=label_selector)
+        services = core_api.list_namespaced_service(namespace=teamname, label_selector=label_selector)
         for svc in services.items:
             logger.debug(f"Deleting Service: {svc.metadata.name}")
-            core_v1.delete_namespaced_service(name=svc.metadata.name, namespace=teamname)
+            core_api.delete_namespaced_service(name=svc.metadata.name, namespace=teamname)
 
         # Delete NetworkPolicies
-        policies = net_v1.list_namespaced_network_policy(namespace=teamname, label_selector=label_selector)
+        policies = net_api.list_namespaced_network_policy(namespace=teamname, label_selector=label_selector)
         for policy in policies.items:
             logger.info(f"Deleting NetworkPolicy: {policy.metadata.name}")
-            net_v1.delete_namespaced_network_policy(name=policy.metadata.name, namespace=teamname)
+            net_api.delete_namespaced_network_policy(name=policy.metadata.name, namespace=teamname)
+
         logger.info(f"All resources with label task={task} deleted from namespace {teamname}")
         return f"All resources with label task={task} deleted from namespace {teamname}"
     except ApiException as e:
@@ -489,11 +526,11 @@ def stop_challenge(teamname: str, task: str) -> str:
 
 
 @retry(**retry_opts)
-def create_secret_in_namespace(teamname: str, secret_data: client.V1Secret) -> None:
+def create_secret_in_namespace(teamname: str, secret_data: V1Secret) -> None:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
-        k8s_client.create_namespaced_secret(namespace=teamname, body=secret_data)
+        core_api = CoreV1Api()
+        core_api.create_namespaced_secret(namespace=teamname, body=secret_data)
         logger.debug(f"Created secret {secret_data.metadata.name} in namespace {teamname}")  # type: ignore
     except ApiException as e:
         if e.status != 403:
@@ -505,21 +542,27 @@ def create_secret_in_namespace(teamname: str, secret_data: client.V1Secret) -> N
 
 @retry(**retry_opts)
 def patch_namespaced_service_account(
-    namespace: str, service_account_name: str, body: client.V1ServiceAccount
+    namespace: str, service_account_name: str, body: V1ServiceAccount
 ) -> None:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
-        k8s_client.patch_namespaced_service_account(name=service_account_name, namespace=namespace, body=body)
+        core_api = CoreV1Api()
+        core_api.patch_namespaced_service_account(name=service_account_name, namespace=namespace, body=body)
         logger.debug(f"Patched service account {service_account_name} in namespace {namespace}")
     except ApiException as e:
         if e.status != 403:
             logger.error(
-                f"API Exception when patching service account {service_account_name} in namespace {namespace}: {e}"
+                (
+                    f"API Exception when patching service account {service_account_name} ",
+                    f"in namespace {namespace}: {e}",
+                )
             )
         else:
             logger.debug(
-                f"API Exception when patching service account {service_account_name} in namespace {namespace}: {e}"
+                (
+                    f"API Exception when patching service account {service_account_name}",
+                    f" in namespace {namespace}: {e}",
+                )
             )
         raise e
 
@@ -529,20 +572,26 @@ def patch_namespaced_service_account(
 def create_team_namespace(teamname: str) -> None:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
-        k8s_client.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=teamname)))
-        logger.debug(f"moving regcred to namespace {teamname}")
-        regcred: client.V1Secret = k8s_client.read_namespaced_secret(
+        core_api = CoreV1Api()
+        core_api.create_namespace(V1Namespace(metadata=V1ObjectMeta(name=teamname)))
+        logger.debug(f"Moving regcred into namespace {teamname}")
+
+        regcred: V1Secret = core_api.read_namespaced_secret(
             name=K8S_IMAGEPULLSECRET_NAME, namespace=K8S_IMAGEPULLSECRET_NAMESPACE
         )  # type: ignore
-        regcred.metadata.namespace = teamname  # type: ignore
-        regcred.metadata.resource_version = None  # type: ignore
-        create_secret_in_namespace(teamname, regcred)  # type: ignore
+
+        if not regcred.metadata:
+            logger.error(f"Secret {K8S_IMAGEPULLSECRET_NAME} is missing metadata.")
+            raise Exception(f"Secret {K8S_IMAGEPULLSECRET_NAME} is missing metadata.")
+
+        regcred.metadata.namespace = teamname
+        regcred.metadata.resource_version = None
+        create_secret_in_namespace(teamname, regcred)
         # patch the default service account to disallow auto-mounting of the token
         patch_namespaced_service_account(
             namespace=teamname,
             service_account_name="default",
-            body=client.V1ServiceAccount(automount_service_account_token=False),
+            body=V1ServiceAccount(automount_service_account_token=False),
         )
     except ApiException as e:
         if e.status != 403:
@@ -556,10 +605,10 @@ def create_team_namespace(teamname: str) -> None:
 
 
 @retry(**retry_opts)
-def create_team_vpn_configmap(teamname):
+def create_team_vpn_configmap(teamname) -> None:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
+        core_api = CoreV1Api()
         teamCertDir = certDirLocationContainer + teamname
 
         ovpn_config = certmanager.get_server_ovpn_config(teamCertDir)
@@ -571,10 +620,10 @@ def create_team_vpn_configmap(teamname):
         up_script = certmanager.get_up_script(teamCertDir)
         down_script = certmanager.get_down_script(teamCertDir)
 
-        config_map = client.V1ConfigMap(
+        config_map = V1ConfigMap(
             api_version="v1",
             kind="ConfigMap",
-            metadata=client.V1ObjectMeta(name=f"vpn-config-{teamname}"),
+            metadata=V1ObjectMeta(name=f"vpn-config-{teamname}"),
             data={
                 "ovpn.conf": ovpn_config,
                 "server.key": server_key,
@@ -587,7 +636,7 @@ def create_team_vpn_configmap(teamname):
             },
         )
 
-        k8s_client.create_namespaced_config_map(namespace=teamname, body=config_map)
+        core_api.create_namespaced_config_map(namespace=teamname, body=config_map)
         logger.debug(f"Created ConfigMap vpn-config-{teamname} in namespace {teamname}")
     except ApiException as e:
         if e.status != 403:
@@ -600,54 +649,52 @@ def create_team_vpn_container(teamname: str) -> None:
     ensure_kube_config_loaded()
     try:
         create_team_vpn_configmap(teamname)
-        k8s_client = client.CoreV1Api()
-        pod_manifest = {
-            "apiVersion": "v1",
-            "kind": "Pod",
-            "metadata": {
-                "name": "vpn-container-pod",
-                "labels": {"name": "vpn-container-pod", "team": teamname},
-            },
-            "spec": {
-                "containers": [
-                    {
-                        "image": "kylemanna/openvpn",
-                        "name": "vpn-container",
-                        "volumeMounts": [
-                            {
-                                "mountPath": "/etc/openvpn",
-                                "name": "vpn-volume",
-                                "readonly": "false",  # might need to be changed later
-                            },
-                            {"mountPath": "/dev/net/tun", "name": "dev-net-tun", "readonly": "false"},
+        core_api = CoreV1Api()
+        pod_manifest = V1Pod(
+            metadata=V1ObjectMeta(
+                name="vpn-container-pod",
+                labels={"name": "vpn-container-pod", "team": teamname},
+            ),
+            spec=V1PodSpec(
+                containers=[
+                    V1Container(
+                        image="kylemanna/openvpn",
+                        name="vpn-container",
+                        volume_mounts=[
+                            V1VolumeMount(
+                                mount_path="/etc/openvpn",
+                                name="vpn-volume",
+                                read_only=False,  # might need to be changed later
+                            ),
+                            V1VolumeMount(mount_path="/dev/net/tun", name="dev-net-tun", read_only=False),
                         ],
                         # NOTE: NET_ADMIN is required for OpenVPN function
-                        "securityContext": {"capabilities": {"add": ["NET_ADMIN"]}},
-                        "env": [{"name": "DEBUG", "value": "1"}],
-                    }
+                        security_context=V1SecurityContext(capabilities=V1Capabilities(add=["NET_ADMIN"])),
+                        env=[V1EnvVar(name="DEBUG", value="1")],
+                    )
                 ],
-                "volumes": [
-                    {
-                        "name": "vpn-volume",
-                        "configMap": {
-                            "name": f"vpn-config-{teamname}",
-                            "items": [
-                                {"key": "ovpn.conf", "path": "openvpn.conf"},
-                                {"key": "server.key", "path": f"pki/private/{PUBLIC_DOMAINNAME}.key"},
-                                {"key": "server.crt", "path": f"pki/issued/{PUBLIC_DOMAINNAME}.crt"},
-                                {"key": "ca.crt", "path": "pki/ca.crt"},
-                                {"key": "ta.key", "path": "pki/ta.key"},
-                                {"key": "ovpn.env", "path": "ovpn_env.sh"},
-                                {"key": "up.sh", "path": "up.sh"},
-                                {"key": "down.sh", "path": "down.sh"},
+                volumes=[
+                    V1Volume(
+                        name="vpn-volume",
+                        config_map=V1ConfigMapVolumeSource(
+                            name=f"vpn-config-{teamname}",
+                            items=[
+                                V1KeyToPath(key="ovpn.conf", path="openvpn.conf"),
+                                V1KeyToPath(key="server.key", path=f"pki/private/{PUBLIC_DOMAINNAME}.key"),
+                                V1KeyToPath(key="server.crt", path=f"pki/issued/{PUBLIC_DOMAINNAME}.crt"),
+                                V1KeyToPath(key="ca.crt", path="pki/ca.crt"),
+                                V1KeyToPath(key="ta.key", path="pki/ta.key"),
+                                V1KeyToPath(key="ovpn.env", path="ovpn_env.sh"),
+                                V1KeyToPath(key="up.sh", path="up.sh"),
+                                V1KeyToPath(key="down.sh", path="down.sh"),
                             ],
-                        },
-                    },
-                    {"name": "dev-net-tun", "hostPath": {"path": "/dev/net/tun"}},
+                        ),
+                    ),
+                    V1Volume(name="dev-net-tun", host_path=V1HostPathVolumeSource(path="/dev/net/tun")),
                 ],
-            },
-        }
-        k8s_client.create_namespaced_pod(body=pod_manifest, namespace=teamname)
+            ),
+        )
+        core_api.create_namespaced_pod(body=pod_manifest, namespace=teamname)
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when creating VPN container for team {teamname}: {e}")
@@ -658,17 +705,17 @@ def create_team_vpn_container(teamname: str) -> None:
 def expose_team_vpn_container(teamname: str, externalport: int) -> None:
     ensure_kube_config_loaded()
     try:
-        logger.debug("about to expose team vpn container")
-        k8s_client = client.CoreV1Api()
-        service = client.V1Service(
-            metadata=client.V1ObjectMeta(
-                name="vpn-container-service",  # Name of the service
-                namespace=teamname,  # Namespace of the pod
+        logger.info(f"Exposing VPN container for team {teamname} on port {externalport}")
+        core_api = CoreV1Api()
+        service = V1Service(
+            metadata=V1ObjectMeta(
+                name="vpn-container-service",
+                namespace=teamname,
             ),
-            spec=client.V1ServiceSpec(
+            spec=V1ServiceSpec(
                 selector={"name": "vpn-container-pod"},  # Selector to match the pod labels
                 ports=[
-                    client.V1ServicePort(
+                    V1ServicePort(
                         port=1194,  # Port exposed by the service (VPN port)
                         target_port=1194,  # Container's port
                         node_port=externalport,  # NodePort; k8s will allocate one if not specified
@@ -677,19 +724,29 @@ def expose_team_vpn_container(teamname: str, externalport: int) -> None:
                 type="NodePort",  # Service type is NodePort
             ),
         )
-        api_response = k8s_client.create_namespaced_service(
-            namespace=teamname,  # Namespace where the service should be created
+        api_service_response: V1Service = core_api.create_namespaced_service(
+            namespace=teamname,
             body=service,
-        )
-        logger.debug(f"Service created. Status: '{api_response.status}'")  # type: ignore
-        # policy_deny= create_network_policy_deny_all(teamname)
-        logger.debug("a")
+        )  # type: ignore
+        logger.debug(f"Service created. Status: '{api_service_response.status}'")
+
+        policy_deny = create_network_policy_deny_all(teamname)
         policy = create_network_policy(teamname)
-        logger.debug("a")
-        api = client.NetworkingV1Api()
-        logger.debug("a")
-        api_response = api.create_namespaced_network_policy(namespace=teamname, body=policy)
-        logger.debug("a")
+        logger.debug("The following network policies will be applied:")
+        logger.debug(f"Deny-all policy: {policy_deny}")
+        logger.debug(f"Restrict-vpn-access policy: {policy}")
+
+        net_api = NetworkingV1Api()
+        logger.debug("Applying network policies...")
+        api_network_response: V1NetworkPolicy = net_api.create_namespaced_network_policy(
+            namespace=teamname, body=policy
+        )  # type: ignore
+        logger.debug(f"Restrict-vpn-access policy created. Status: '{api_network_response}'")
+
+        api_network_response_deny: V1NetworkPolicy = net_api.create_namespaced_network_policy(
+            namespace=teamname, body=policy_deny
+        )  # type: ignore
+        logger.debug(f"Deny-all policy created. Status: '{api_network_response_deny}'")
         logger.debug("Successfully applied network policy")
     except ApiException as e:
         if e.status != 403:
@@ -714,10 +771,10 @@ def obtain_user_ovpn_config(teamname: str, username: str) -> str:
 def delete_namespace(teamname: str, timeout: int = 300, interval: int = 5) -> int:
     ensure_kube_config_loaded()
     try:
-        k8s_client = client.CoreV1Api()
+        core_api = CoreV1Api()
         try:
             logger.info(f"Deleting namespace: {teamname}")
-            k8s_client.delete_namespace(name=teamname)
+            core_api.delete_namespace(name=teamname)
         except ApiException as e:
             if e.status == 404:
                 logger.info(f"Namespace {teamname} does not exist.")
@@ -729,14 +786,14 @@ def delete_namespace(teamname: str, timeout: int = 300, interval: int = 5) -> in
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                ns = k8s_client.read_namespace(name=teamname)
+                ns = core_api.read_namespace(name=teamname)
 
                 # If namespace is stuck terminating → remove finalizers
                 if ns.metadata.deletion_timestamp and ns.spec.finalizers:  # type: ignore
                     logger.debug(f"Namespace {teamname} stuck in Terminating, removing finalizers...")
-                    body = {"metadata": {"finalizers": []}}
+                    body = V1Namespace(metadata=V1ObjectMeta(finalizers=[]))
                     try:
-                        k8s_client.patch_namespace(name=teamname, body=body)
+                        core_api.patch_namespace(name=teamname, body=body)
                     except ApiException as e:
                         logger.error(f"Failed to patch namespace finalizers: {e}")
                         return 1
