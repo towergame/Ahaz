@@ -207,7 +207,7 @@ def start_challenge_pod(
                     "visible": str(
                         visible_to_user
                     ),  # used to identify if this pods IP address will be shown to user.
-                    "task": taskname,  # identifies the task this pod belongs to, necessary for network policies
+                    "task": taskname,  # identifies task pod is part of, used for network policies
                     "name": k8s_name,  # used for service selector
                 },
             ),
