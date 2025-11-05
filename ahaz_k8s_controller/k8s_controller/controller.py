@@ -263,67 +263,71 @@ def start_challenge(teamname: str, challengename: str) -> int:
         raise e
 
 
-# TODO: showInvisible should be a bool
+def summarise_pods_list(pod_list: V1PodList, showInvisible: bool) -> list[dict[str, str]]:
+    if pod_list is None or not pod_list.items:
+        return []
+
+    pod_info = []
+    for pod in pod_list.items:
+        pod = pod  # type: V1Pod
+
+        # Test whether we have all the values we expect
+        if not pod.metadata:
+            logger.warning("Pod is missing metadata:")
+            logger.warning(pod)
+            continue
+
+        if pod.status is None:
+            logger.warning(f"Pod {pod.metadata.name} in namespace {pod.metadata.namespace} has no status.")
+            continue
+
+        # Test if pod is visible
+        if "visible" in pod.metadata.labels:
+            pod_visible = int(pod.metadata.labels["visible"])
+        else:
+            if pod.metadata.name != "vpn-container-pod":
+                logger.warning(
+                    f"Pod {pod.metadata.name} in namespace {pod.metadata.namespace} missing 'visible' label."
+                )
+            pod_visible = 1  # default to visible if label is missing
+
+        if pod_visible != 1 and not showInvisible:
+            continue
+
+        # Get pod status
+        is_vpn = pod.metadata.name == "vpn-container-pod"
+
+        # because python k8s api does not show status terminating :/
+        if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
+            state = "Terminating"
+        else:
+            state = str(pod.status.phase)
+
+        pod_data = {
+            "status": state,
+            "ip": pod.status.pod_ip,
+            "visibleIP": pod_visible,
+            "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"]) if is_vpn else None,
+            "name": pod.metadata.labels["name"] if is_vpn else None,
+        }
+
+        pod_info.append(pod_data)
+
+    return pod_info
+
+
 @retry(**retry_opts)
-def get_pods_namespace(teamname: str, showInvisible: int) -> str:
+def get_pods_namespace(teamname: str, showInvisible: bool) -> str:
     ensure_kube_config_loaded()
     try:
         core_api = CoreV1Api()
         pod_list: V1PodList = core_api.list_namespaced_pod(teamname)
+
         if not pod_list.items:
             return json.dumps([])
-        pod_info = []
-        try:
-            for pod in pod_list.items:
-                pod = pod  # type: V1Pod
+        pod_info = summarise_pods_list(pod_list, showInvisible)
 
-                # Test whether we have all the values we expect
-                if not pod.metadata:
-                    logger.warning(f"Pod in namespace {teamname} is missing metadata.")
-                    continue
-
-                if pod.status is None:
-                    logger.warning(f"Pod {pod.metadata.name} in namespace {teamname} has no status.")
-                    continue
-
-                # Test if pod is visible
-                if "visible" in pod.metadata.labels:
-                    pod_visible = int(pod.metadata.labels["visible"])
-                else:
-                    if pod.metadata.name != "vpn-container-pod":
-                        logger.warning(
-                            f"Pod {pod.metadata.name} in namespace {teamname} missing 'visible' label."
-                        )
-                    pod_visible = 1  # default to visible if label is missing
-
-                if pod_visible != 1 and showInvisible != 1:
-                    continue
-
-                # Get pod status
-                is_vpn = pod.metadata.name == "vpn-container-pod"
-
-                # because python k8s api does not show status terminating :/
-                if pod.metadata.deletion_timestamp is not None and pod.status.phase in ("Pending", "Running"):
-                    state = "Terminating"
-                else:
-                    state = str(pod.status.phase)
-
-                pod_data = {
-                    "status": state,
-                    "ip": pod.status.pod_ip,
-                    "visibleIP": pod_visible,
-                    "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"])
-                    if is_vpn
-                    else None,
-                    "name": pod.metadata.labels["name"] if is_vpn else None,
-                }
-
-                pod_info.append(pod_data)
-
-            return json.dumps(pod_info)
-        except Exception as e:
-            logger.error(f"Error processing pods in namespace {teamname}: {e}")
-            raise e
+        return json.dumps(pod_info)
     except ApiException as e:
         if e.status != 403:
             logger.error(f"API Exception when getting pods in namespace {teamname}: {e}")
