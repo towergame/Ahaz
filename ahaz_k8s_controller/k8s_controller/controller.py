@@ -556,17 +556,13 @@ def patch_namespaced_service_account(
     except ApiException as e:
         if e.status != 403:
             logger.error(
-                (
-                    f"API Exception when patching service account {service_account_name} ",
-                    f"in namespace {namespace}: {e}",
-                )
+                f"API Exception when patching service account {service_account_name} "
+                + f"in namespace {namespace}: {e}",
             )
         else:
             logger.debug(
-                (
-                    f"API Exception when patching service account {service_account_name}",
-                    f" in namespace {namespace}: {e}",
-                )
+                f"API Exception when patching service account {service_account_name}"
+                + f" in namespace {namespace}: {e}",
             )
         raise e
 
