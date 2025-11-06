@@ -545,10 +545,43 @@ def create_secret_in_namespace(teamname: str, secret_data: V1Secret) -> None:
 
 
 @retry(**retry_opts)
+def check_namespaced_service_account_exists(namespace: str, service_account_name: str) -> bool:
+    ensure_kube_config_loaded()
+    try:
+        core_api = CoreV1Api()
+        core_api.read_namespaced_service_account(name=service_account_name, namespace=namespace)
+        logger.debug(f"Service account {service_account_name} exists in namespace {namespace}")
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            logger.debug(f"Service account {service_account_name} does not exist in namespace {namespace}")
+            return False
+        elif e.status != 403:
+            logger.error(
+                f"API Exception when checking service account {service_account_name} "
+                + f"in namespace {namespace}: {e}",
+            )
+        else:
+            logger.debug(
+                f"API Exception when checking service account {service_account_name} "
+                + f"in namespace {namespace}: {e}",
+            )
+        raise e
+
+
+@retry(**retry_opts)
 def patch_namespaced_service_account(
     namespace: str, service_account_name: str, body: V1ServiceAccount
 ) -> None:
     ensure_kube_config_loaded()
+
+    if not check_namespaced_service_account_exists(namespace, service_account_name):
+        logger.warning(
+            f"Service account {service_account_name} does not exist in"
+            + f" namespace {namespace}, skipping patch."
+        )
+        return
+
     try:
         core_api = CoreV1Api()
         core_api.patch_namespaced_service_account(name=service_account_name, namespace=namespace, body=body)
