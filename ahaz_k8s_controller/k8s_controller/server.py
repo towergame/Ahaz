@@ -43,11 +43,6 @@ logger = logging.getLogger()
 logging.getLogger("kubernetes").setLevel(logging.INFO)
 
 
-@app.route("/genteam", methods=["GET"])
-def team_get():
-    return "genteamed"
-
-
 @app.route("/start_challenge", methods=["POST", "GET"])
 def start_challenge():
     try:
@@ -80,11 +75,6 @@ def stop_challenge():
     )
     status = controller.stop_challenge(request_data.team_id, request_data.challenge_id)
     return status
-
-
-@app.route("/get_images", methods=["GET"])
-def get_images():
-    return [{"challengename": challenge} for challenge in dboperator.get_images_from_db()]
 
 
 @app.route("/get_challenges", methods=["GET"])
@@ -183,56 +173,6 @@ def team_post():
 
     Thread(target=gen_team_from_flask_for_subprocess, args=(request_data,), daemon=True).start()
     logger.info(f"Started team creation as a thread {request_data.team_id}")
-    return "Started team creation as a thread"
-
-
-def team_post_lazy_subprocess(request_data: TeamRequest) -> str:
-    port = int(dboperator.get_last_port()) + 1
-    try:
-        try:
-            t1 = Thread(
-                target=certmanager.gen_team,
-                args=[
-                    request_data.team_id,
-                    PUBLIC_DOMAINNAME,
-                    port,
-                    "tcp",
-                    CERT_DIR_CONTAINER,
-                ],
-            )
-            t1.start()
-        except Exception as e:
-            logger.error(f"Error starting certificate generation thread: {e}")
-            logger.debug("doing except")
-            certmanager.gen_team(request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_CONTAINER)
-            controller.create_team_namespace(request_data.team_id)
-            logger.debug("=8")
-            controller.create_team_vpn_container(request_data.team_id)
-            logger.debug("about to expose team vpn container")
-            controller.expose_team_vpn_container(request_data.team_id, port)
-            logger.debug("=9")
-            dboperator.insert_team_into_db(request_data.team_id)
-            dboperator.insert_vpn_port_into_db(request_data.team_id, port)
-        logger.info("Successfully registered a team %s", request_data.team_id)
-        return "Successfully made a team"
-    except Exception as e:
-        logger.error("ERROR registering a team %s: %s", request_data.team_id, e)
-        return "Something went wrong"
-
-
-@app.route("/gen_team_lazy", methods=["POST"])
-def team_post_lazy():
-    try:
-        request_data = TeamRequest(**request.get_json())
-    except ValidationError as e:
-        logger.error(f"Validation error: {e}")
-        return "Invalid request data", 400
-
-    teamExists = dboperator.get_team_id(request_data.team_id)
-    if teamExists != "null":
-        return "Team already exists"
-
-    Thread(target=team_post_lazy_subprocess, args=(request_data,), daemon=True).start()
     return "Started team creation as a thread"
 
 
@@ -395,6 +335,7 @@ def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=Fals
         ).start()
 
 
+# TODO: add token
 @app.route("/regenerate", methods=["POST"])
 def regenerate():
     try:
@@ -411,12 +352,7 @@ def regenerate():
     return f"Started a thread for reregistration of team {request_data.team_id}"
 
 
-@app.route("/get_last_port", methods=["GET"])
-def get_last_port():
-    logger.debug("trying to run dboperator.get_last_port()")
-    return str(dboperator.get_last_port())
-
-
+# TODO: add token
 @app.route("/del_team", methods=["POST"])
 def del_team():
     request_data_json = request.get_json()
