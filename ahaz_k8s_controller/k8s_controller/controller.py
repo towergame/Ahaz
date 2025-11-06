@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import resource
 import time
 
 import certmanager
@@ -29,6 +30,7 @@ from kubernetes.client import (
     V1Pod,
     V1PodList,
     V1PodSpec,
+    V1ResourceRequirements,
     V1Secret,
     V1SecurityContext,
     V1Service,
@@ -225,6 +227,18 @@ def start_challenge_pod(
                         name="container",
                         env=[V1EnvVar(name=var["name"], value=var["value"]) for var in env_vars],
                         # TODO: Apply resource limits
+                        resources=V1ResourceRequirements(
+                            limits={
+                                "memory": ram,
+                                "cpu": str(cpu),
+                                "ephemeral-storage": storage,
+                            },
+                            requests={
+                                "memory": "0",
+                                "cpu": "0",
+                                "ephemeral-storage": "0",
+                            },
+                        ),
                         # 'resources':{
                         #    'limits':{
                         #        'memory':ram,
