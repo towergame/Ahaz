@@ -226,7 +226,6 @@ def start_challenge_pod(
                         image=image,
                         name="container",
                         env=[V1EnvVar(name=var["name"], value=var["value"]) for var in env_vars],
-                        # TODO: Apply resource limits
                         resources=V1ResourceRequirements(
                             limits={
                                 "memory": ram,
