@@ -95,13 +95,6 @@ def get_challenge_from_k8s_name(k8s_name: str) -> str:
     return str(rows[0][0])
 
 
-def get_images_from_db() -> list[str]:
-    with get_connection() as conn, conn.cursor() as cursor:
-        cursor.execute("SELECT challengename FROM image")
-        rows = cursor.fetchall()
-    return [str(row[0]) for row in rows]
-
-
 def insert_team_into_db(teamname: str) -> None:
     with get_connection() as conn, conn.cursor() as cursor:
         if get_team_id(teamname) != "null":
