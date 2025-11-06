@@ -314,7 +314,9 @@ def summarise_pods_list(pod_list: V1PodList, showInvisible: bool) -> list[dict[s
             "status": state,
             "ip": pod.status.pod_ip,
             "visibleIP": pod_visible,
-            "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"]) if is_vpn else None,
+            "task": dboperator.get_challenge_from_k8s_name(pod.metadata.labels["name"])
+            if not is_vpn
+            else None,
             "name": pod.metadata.labels["name"] if is_vpn else None,
         }
 
