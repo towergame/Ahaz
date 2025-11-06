@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import logging.config
@@ -10,6 +11,7 @@ import controller
 import dboperator
 import uvicorn
 from asgiref.wsgi import WsgiToAsgi
+from events import RedisEventManager
 from flask import Flask, request
 from pydantic import ValidationError
 
@@ -25,6 +27,9 @@ PUBLIC_DOMAINNAME = getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
 TEAM_PORT_RANGE_START = int(getenv("TEAM_PORT_RANGE_START", 31200))
 
 app = Flask(__name__)
+
+REDIS_URL = getenv("REDIS_URL", "redis://localhost:6379")
+redis_event_manager = RedisEventManager(REDIS_URL)
 
 LOGLEVEL = getenv("LOGLEVEL", "INFO").upper()
 logging.basicConfig(
@@ -231,6 +236,16 @@ def team_post_lazy():
     return "Started team creation as a thread"
 
 
+def set_registration_progress(team_id: str, user_id: str, progress: int) -> None:
+    dboperator.set_registration_progress_team(team_id, user_id, progress)
+    publish_event(
+        {
+            "type": "registration_progress",
+            "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
+        }
+    )
+
+
 def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
     if port == -1:
         port = (
@@ -243,47 +258,47 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
         if (
             dboperator.get_registration_progress_team(request_data.team_id) == -999
         ):  # if no team has been registered, register it
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 1)
+            set_registration_progress(request_data.team_id, request_data.user_id, 1)
             logger.debug("started registration proces for a team")
 
             certmanager.gen_team(request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_CONTAINER)
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 2)
+            set_registration_progress(request_data.team_id, request_data.user_id, 2)
             logger.debug(f"generated certificates for team {request_data.team_id}")
 
             controller.create_team_namespace(request_data.team_id)
             logger.debug(f"created namespace for team {request_data.team_id}")
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 3)
+            set_registration_progress(request_data.team_id, request_data.user_id, 3)
             controller.create_team_vpn_container(request_data.team_id)
             logger.debug(f"created VPN Container for team {request_data.team_id}")
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 4)
+            set_registration_progress(request_data.team_id, request_data.user_id, 4)
             controller.expose_team_vpn_container(request_data.team_id, port)
             logger.debug(f"exposed VPN Container for team {request_data.team_id}")
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 5)
+            set_registration_progress(request_data.team_id, request_data.user_id, 5)
             logger.debug("mystical 5th step performed")
 
             dboperator.insert_team_into_db(request_data.team_id)
             dboperator.insert_vpn_port_into_db(request_data.team_id, port)
             logger.debug(f"inserted data into db for team {request_data.team_id}")
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 6)
+            set_registration_progress(request_data.team_id, request_data.user_id, 6)
             logger.info(f"Successfully registered a team {request_data.team_id}")
         elif (
             dboperator.get_registration_progress_team(request_data.team_id) < 6
         ):  # status is less than 6, means that team is being registered, so wait while it is being done
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 0)
+            set_registration_progress(request_data.team_id, request_data.user_id, 0)
 
             while dboperator.get_registration_progress_team(request_data.team_id) < 6:
                 logger.info(f"waiting for team {request_data.team_id} user {request_data.user_id}")
                 sleep(5)
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 6)
+            set_registration_progress(request_data.team_id, request_data.user_id, 6)
         elif (
             dboperator.get_registration_progress_team(request_data.team_id) >= 6
         ):  # if team is already registered, then
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 6)
+            set_registration_progress(request_data.team_id, request_data.user_id, 6)
 
         teststatus = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
         logger.debug(teststatus)
@@ -298,16 +313,16 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
             dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id) == 6
         ):  # if user isn't registered or this was the user that first called the team registration
             logger.debug("about to register user ovpn config")
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 7)
+            set_registration_progress(request_data.team_id, request_data.user_id, 7)
             controller.register_user_ovpn(request_data.team_id, request_data.user_id)
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 8)
+            set_registration_progress(request_data.team_id, request_data.user_id, 8)
             logger.debug("about to obtain config")
             config = controller.obtain_user_ovpn_config(request_data.team_id, request_data.user_id)
             logger.debug("about to insert config into db")
             dboperator.insert_user_vpn_config(request_data.team_id, request_data.user_id, config)
 
-            dboperator.set_registration_progress_team(request_data.team_id, request_data.user_id, 9)
+            set_registration_progress(request_data.team_id, request_data.user_id, 9)
             logger.debug("successfully added a user to db")
             logger.info(f"Registered user {request_data.user_id} to team {request_data.team_id}")
             return "successfully added a user to db"
@@ -416,6 +431,41 @@ def del_team():
 
     Thread(target=del_team_subprocess, args=(request_data,), daemon=True).start()
     return f"Started a thread for deletion of team {teamname}"
+
+
+@app.route("/events", methods=["GET"])
+def events():
+    def event_stream():
+        pubsub = redis_event_manager.subscribe()
+        pubsub.subscribe("ahaz_events")
+
+        loop = asyncio.new_event_loop()
+
+        try:
+            ticks = 0
+            while True:
+                ticks += 1
+
+                if ticks % 50 == 0:
+                    yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
+
+                message = pubsub.get_message(timeout=0.1)
+                if message is None:
+                    loop.run_until_complete(asyncio.sleep(0.1))
+                    continue
+
+                if message["type"] == "message":
+                    data = message["data"].decode("utf-8")
+                    yield f"{data}\n"
+        finally:
+            pubsub.unsubscribe("ahaz_events")
+            pubsub.close()
+
+    return app.response_class(event_stream(), 200, {"Content-Type": "text/event-stream"})
+
+
+def publish_event(event_data: dict) -> None:
+    redis_event_manager.publish_event("ahaz_events", json.dumps(event_data))
 
 
 asgi = WsgiToAsgi(app)

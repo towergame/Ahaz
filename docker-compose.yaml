@@ -18,6 +18,7 @@ services:
       DB_DBNAME: "ahaz"
       DB_USERNAME: "dbeaver"
       DB_PASSWORD: "dbeaver"
+      REDIS_URL: "redis://10.33.0.4:6379"
       PUBLIC_DOMAINNAME: "ahaz.lan"
       K8S_IP_RANGE: "10.42.0.0 255.255.255.0"
       K8S_IMAGEPULLSECRET_NAME: "regcred"
@@ -66,6 +67,14 @@ services:
       default:
     ports:
       - "3306:3306"
+  k8s_controller_redis:
+    image: redis:4
+    restart: always
+    volumes:
+    - ./ahaz_data/redis:/data
+    networks:
+      ahaz_db_connection:
+        ipv4_address: 10.33.0.4
 networks:
   ahaz_db_connection:
     driver: bridge
