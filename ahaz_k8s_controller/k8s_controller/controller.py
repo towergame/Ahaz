@@ -239,13 +239,6 @@ def start_challenge_pod(
                                 "ephemeral-storage": "0",
                             },
                         ),
-                        # 'resources':{
-                        #    'limits':{
-                        #        'memory':ram,
-                        #        'cpu':str(cpu),
-                        #        'ephemeral-storage':storage
-                        #    }
-                        # }
                     )
                 ],
                 image_pull_secrets=[{"name": K8S_IMAGEPULLSECRET_NAME}],
