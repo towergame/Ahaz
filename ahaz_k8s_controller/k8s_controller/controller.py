@@ -108,6 +108,13 @@ def should_retry_request(exception):
     return is_forbidden
 
 
+def should_retry_patch(exception):
+    return should_retry_request(exception) or (
+        # Possible we are patching something not created yet
+        isinstance(exception, ApiException) and exception.status == 404
+    )
+
+
 retry_opts = {
     "retry": retry_if_exception(should_retry_request),  # type: ignore
     "stop": stop_after_attempt(5),  # Stop after 5 attempts
@@ -569,28 +576,26 @@ def check_namespaced_service_account_exists(namespace: str, service_account_name
         raise e
 
 
-@retry(**retry_opts)
+@retry(**retry_opts, retry=retry_if_exception(should_retry_patch))
 def patch_namespaced_service_account(
     namespace: str, service_account_name: str, body: V1ServiceAccount
 ) -> None:
     ensure_kube_config_loaded()
-
-    if not check_namespaced_service_account_exists(namespace, service_account_name):
-        logger.warning(
-            f"Service account {service_account_name} does not exist in"
-            + f" namespace {namespace}, skipping patch."
-        )
-        return
 
     try:
         core_api = CoreV1Api()
         core_api.patch_namespaced_service_account(name=service_account_name, namespace=namespace, body=body)
         logger.debug(f"Patched service account {service_account_name} in namespace {namespace}")
     except ApiException as e:
-        if e.status != 403:
+        if e.status not in (403, 404):
             logger.error(
                 f"API Exception when patching service account {service_account_name} "
                 + f"in namespace {namespace}: {e}",
+            )
+        elif e.status == 404:
+            logger.warning(
+                f"Service account {service_account_name} not found in namespace {namespace}"
+                + f" when patching: {e}",
             )
         else:
             logger.debug(
