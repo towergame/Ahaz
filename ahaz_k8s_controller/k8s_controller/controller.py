@@ -576,7 +576,13 @@ def check_namespaced_service_account_exists(namespace: str, service_account_name
         raise e
 
 
-@retry(**retry_opts, retry=retry_if_exception(should_retry_patch))
+patch_retry_opts = {
+    **retry_opts,
+    "retry": retry_if_exception(should_retry_patch),  # type: ignore
+}
+
+
+@retry(**patch_retry_opts)
 def patch_namespaced_service_account(
     namespace: str, service_account_name: str, body: V1ServiceAccount
 ) -> None:
