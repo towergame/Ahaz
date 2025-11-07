@@ -52,7 +52,9 @@ logger = logging.getLogger()
 PUBLIC_DOMAINNAME = os.getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
 K8S_IMAGEPULLSECRET_NAMESPACE = os.getenv("K8S_IMAGEPULLSECRET_NAMESPACE", "default")
 K8S_IMAGEPULLSECRET_NAME = os.getenv("K8S_IMAGEPULLSECRET_NAME", "regcred")
-certDirLocationContainer = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
+CERT_DIR_CONTAINER = os.getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certdir")
+OVPN_IMAGE = os.getenv("OVPN_IMAGE", "kylemanna/openvpn")
+OVPN_TAG = os.getenv("OVPN_TAG", "latest")
 
 
 # Quick heuristic to determine if the kube folder has a valid kubeconfig file
@@ -661,7 +663,7 @@ def create_team_vpn_configmap(teamname) -> None:
     ensure_kube_config_loaded()
     try:
         core_api = CoreV1Api()
-        teamCertDir = certDirLocationContainer + teamname
+        teamCertDir = CERT_DIR_CONTAINER + teamname
 
         ovpn_config = certmanager.get_server_ovpn_config(teamCertDir)
         server_key = certmanager.get_server_key(teamCertDir)
@@ -710,13 +712,13 @@ def create_team_vpn_container(teamname: str) -> None:
             spec=V1PodSpec(
                 containers=[
                     V1Container(
-                        image="kylemanna/openvpn",
+                        image=f"{OVPN_IMAGE}:{OVPN_TAG}",
                         name="vpn-container",
                         volume_mounts=[
                             V1VolumeMount(
                                 mount_path="/etc/openvpn",
                                 name="vpn-volume",
-                                read_only=False,  # might need to be changed later
+                                read_only=True,  # might need to be changed later
                             ),
                             V1VolumeMount(mount_path="/dev/net/tun", name="dev-net-tun", read_only=False),
                         ],
@@ -807,14 +809,14 @@ def expose_team_vpn_container(teamname: str, externalport: int) -> None:
 
 
 def register_user_ovpn(teamname: str, username: str) -> str:
-    vpnDirLocation = certDirLocationContainer + teamname
+    vpnDirLocation = CERT_DIR_CONTAINER + teamname
     result = certmanager.generate_user(teamname, username, vpnDirLocation)
     dboperator.insert_user_vpn_config(teamname, username, result)
     return "successfully registered"
 
 
 def obtain_user_ovpn_config(teamname: str, username: str) -> str:
-    vpnDirLocation = certDirLocationContainer + teamname
+    vpnDirLocation = CERT_DIR_CONTAINER + teamname
     result = certmanager.get_user(teamname, username, vpnDirLocation)
     result = str(result).replace("\\n", "\n")
     return result
