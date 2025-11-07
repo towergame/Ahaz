@@ -24,16 +24,15 @@ WORKDIR /app
 COPY ahaz_k8s_controller/pyproject.toml /app/ahaz_k8s_controller/pyproject.toml
 COPY ahaz_common/pyproject.toml /app/ahaz_common/pyproject.toml
 COPY pyproject.toml /app/pyproject.toml
-COPY uv.lock /app/uv.lock
 
 # Make sure the environment has all the dependencies
-RUN uv sync --locked --all-packages
+RUN uv sync --all-packages
 
 # Copy over the rest of the project files
 COPY ahaz_k8s_controller /app/ahaz_k8s_controller/
 COPY ahaz_common /app/ahaz_common/
 
-RUN uv sync --locked --all-packages
+RUN uv sync --all-packages
 
 # Run the server
 CMD ["/bin/uv", "run", "/app/ahaz_k8s_controller/k8s_controller/server.py"]

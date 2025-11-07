@@ -5,9 +5,10 @@ description = "Monorepo for Ahaz"
 readme = "README.md"
 authors = [{ name = "auseklitis" }, { name = "towergame" }, { name = "SwanX1"}]
 requires-python = ">=3.12"
+dependencies = []
 
 [tool.uv.workspace]
-members = ["ahaz_k8s_controller", "ahaz_common"]
+members = ["ahaz_k8s_controller", "ahaz_common", "ahaz_cli"]
 
 [tool.ruff]
 line-length = 110
