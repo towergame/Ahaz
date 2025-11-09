@@ -91,10 +91,10 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
             # Set up networks
             network_guide = {}
             for net in task.networks:
-                log.info(f"Setting up network '{net.netname}'...")
-                status.update(f"Setting up network '{net.netname}'...")
+                log.info(f"Setting up network '{net.name}'...")
+                status.update(f"Setting up network '{net.name}'...")
                 network = client.networks.create(
-                    name=f"ahaz-{normalise_task_name(task.name)}-{net.netname}", check_duplicate=True
+                    name=f"{get_network_name(task.name, net.name)}", check_duplicate=True
                 )
                 for device in net.devices:
                     network_guide.setdefault(device, []).append(network)
@@ -102,14 +102,10 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
             status.update("Setting up containers...")
             containers = []
             for pod in task.pods:
-                status.update(f"Creating container for pod '{pod.k8s_name}'...")
+                status.update(f"Creating container for pod '{pod.name}'...")
 
                 image_tag = f"{pod.image.image_name}:{task.version}"
-                env_vars = {
-                    env.env_var_name: env.env_var_value
-                    for env in task.env_vars or []
-                    if env.k8s_name == pod.k8s_name
-                }
+                env_vars = {env.name: env.value for env in task.env_vars or [] if env.pod_name == pod.name}
                 testing = getattr(pod, "testing", None)
                 exposed_ports = {
                     port.split(":")[0]: int(port.split(":")[1])
@@ -118,7 +114,7 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
 
                 container = client.containers.run(
                     image=image_tag,
-                    name=f"ahaz-{normalise_task_name(task.name)}-{pod.k8s_name}",
+                    name=f"{get_container_name(task.name, pod.name)}",
                     detach=True,
                     tty=True,
                     stdin_open=True,
@@ -126,14 +122,14 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
                     mem_limit=config_units_to_docker_units(pod.limits_ram),
                     cpu_count=pod.limits_cpu,
                     ports=exposed_ports,
-                    hostname=pod.k8s_name,
+                    hostname=pod.name,
                     stream=True,
                 )
                 containers.append((pod, container))
 
                 # Connect to networks
-                for network in network_guide.get(pod.k8s_name, []):
-                    status.update(f"Connecting pod '{pod.k8s_name}' to network '{network.name}'...")
+                for network in network_guide.get(pod.name, []):
+                    status.update(f"Connecting pod '{pod.name}' to network '{network.name}'...")
                     network.connect(container)
 
             status.update("Task environment set up successfully.")
@@ -141,7 +137,7 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
     except Exception as e:
         # Clean up any created containers and networks
         log.error(f"Error setting up task environment: {e}")
-        cleanup_env(task.name, [pod.k8s_name for pod in task.pods], [net.netname for net in task.networks])
+        cleanup_env(task.name, [pod.name for pod in task.pods], [net.name for net in task.networks])
         raise e
     return containers
 
@@ -190,7 +186,7 @@ def stream_logs(pod: Pod, container: Container, logger: _ContainerLoggerAdapter)
                         for segment in ansi_line:
                             logger.info(segment.plain)
         except Exception as e:
-            log.debug(f"Log stream for pod '{pod.k8s_name}' ended: {e}")
+            log.debug(f"Log stream for pod '{pod.name}' ended: {e}")
 
 
 def log_docker_logs(containers: list[tuple[Pod, Container]], exit_callback: Callable) -> None:
@@ -200,17 +196,15 @@ def log_docker_logs(containers: list[tuple[Pod, Container]], exit_callback: Call
     # Create loggers for each container
     loggers: dict[str, _ContainerLoggerAdapter] = {}
     for pod, _ in containers:
-        logger = logging.getLogger(pod.k8s_name)
-        loggers[pod.k8s_name] = _ContainerLoggerAdapter(logger, {"container": pod.k8s_name})
+        logger = logging.getLogger(pod.name)
+        loggers[pod.name] = _ContainerLoggerAdapter(logger, {"container": pod.name})
     try:
         # Fetch logs from containers
         # TODO: I am fairly certain this allows the threads to log also the container shutdown logs,
         # but I have not tested this
         threads = []
         for pod, container in containers:
-            t = threading.Thread(
-                target=stream_logs, args=(pod, container, loggers[pod.k8s_name]), daemon=True
-            )
+            t = threading.Thread(target=stream_logs, args=(pod, container, loggers[pod.name]), daemon=True)
             t.start()
             threads.append(t)
 

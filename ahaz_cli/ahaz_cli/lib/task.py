@@ -21,6 +21,8 @@ def deserialise_task(task_config: str) -> Task:
         raise ValueError("Invalid task configuration structure") from e
 
 
+# TODO: Figure out a better way to handle serialisation of nested objects
+# TODO: Is this even necessary?
 def serialise_task(task: Task) -> str:
     config_dict = {
         "name": task.name,
@@ -29,7 +31,7 @@ def serialise_task(task: Task) -> str:
         "scoring_type": task.scoring_type,
         "pods": [
             {
-                "k8s_name": pod.k8s_name,
+                "name": pod.name,
                 "image": {
                     "image_name": pod.image.image_name,
                     "build_context": pod.image.build_context,
@@ -44,12 +46,12 @@ def serialise_task(task: Task) -> str:
             }
             for pod in task.pods
         ],
-        "networks": [{"netname": net.netname, "devices": net.devices} for net in task.networks],
+        "networks": [{"name": net.name, "devices": net.devices} for net in task.networks],
         "env_vars": [
             {
-                "k8s_name": env.k8s_name,
-                "env_var_name": env.env_var_name,
-                "env_var_value": env.env_var_value,
+                "pod_name": env.pod_name,
+                "name": env.name,
+                "value": env.value,
             }
             for env in task.env_vars or []
         ],

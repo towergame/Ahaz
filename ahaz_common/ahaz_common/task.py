@@ -31,7 +31,7 @@ class TestEnv(BaseModel):
 
 
 class Pod(BaseModel):
-    k8s_name: str
+    name: str
     # TODO: Support multi-image pods
     image: Image
     limits_ram: str
@@ -41,29 +41,26 @@ class Pod(BaseModel):
 
     def __str__(self):
         return (
-            f"Pod(k8s_name={self.k8s_name}, image={self.image}, limits_ram={self.limits_ram}, "
+            f"Pod(name={self.name}, image={self.image}, limits_ram={self.limits_ram}, "
             f"limits_cpu={self.limits_cpu}, visible_to_user={self.visible_to_user}, testing={self.testing})"
         )
 
 
 class Network(BaseModel):
-    netname: str
+    name: str
     devices: list[str]
 
     def __str__(self):
-        return f"Networks(netname={self.netname}, devices={self.devices})"
+        return f"Networks(name={self.name}, devices={self.devices})"
 
 
 class EnvVar(BaseModel):
-    k8s_name: str
-    env_var_name: str
-    env_var_value: str
+    pod_name: str
+    name: str
+    value: str
 
     def __str__(self):
-        return (
-            f"EnvVars(k8s_name={self.k8s_name}, env_var_name={self.env_var_name}, "
-            f"env_var_value={self.env_var_value})"
-        )
+        return f"EnvVars(pod_name={self.pod_name}, name={self.name}, value={self.value})"
 
 
 class Task(BaseModel):

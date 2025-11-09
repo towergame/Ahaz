@@ -37,25 +37,25 @@ def test(
     log.info("Testing Docker images for all pods...")
     client = docker.from_env()
     for pod in task.pods:
-        with Status(f"Checking image for pod '{pod.k8s_name}'...", spinner="dots") as status:
+        with Status(f"Checking image for pod '{pod.name}'...", spinner="dots") as status:
             image_tag = f"{pod.image.image_name}:{task.version}"
             if not build:
                 # See if we can find the image locally
                 try:
                     client.images.get(image_tag)
                     status.update(f"Image '{image_tag}' found locally.")
-                    log.info(f"Image '{image_tag}' found locally for pod '{pod.k8s_name}'.")
+                    log.info(f"Image '{image_tag}' found locally for pod '{pod.name}'.")
                     continue
                 except docker.errors.ImageNotFound:
-                    log.info(f"Image '{image_tag}' not found locally for pod '{pod.k8s_name}', building...")
+                    log.info(f"Image '{image_tag}' not found locally for pod '{pod.name}', building...")
             # Build the image
             status.update(f"Building image '{image_tag}'...")
-            log.info(f"Building image '{image_tag}' for pod '{pod.k8s_name}'...")
+            log.info(f"Building image '{image_tag}' for pod '{pod.name}'...")
             build_args = {arg.name: arg.value for arg in (pod.image.build_args or [])}
             try:
                 try_build_image(image_tag, pod.image.build_context, build_args, verbose)
             except Exception as e:
-                log.error(f"Failed to build image '{image_tag}' for pod '{pod.k8s_name}': {e}")
+                log.error(f"Failed to build image '{image_tag}' for pod '{pod.name}': {e}")
                 raise e
 
     # Attempt to set up the entire task environment
@@ -65,7 +65,7 @@ def test(
         log_docker_logs(
             containers,
             lambda: cleanup_env(
-                task.name, [pod.k8s_name for pod in task.pods], [net.netname for net in task.networks]
+                task.name, [pod.name for pod in task.pods], [net.name for net in task.networks]
             ),
         )
     log.info("Task test completed.")
