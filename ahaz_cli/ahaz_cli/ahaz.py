@@ -11,7 +11,8 @@ from rich.status import Status
 
 from .lib.docker import cleanup_env, create_env, log_docker_logs, try_build_image
 from .lib.file import test_for_file
-from .lib.task import deserialise_task
+from .lib.task import deserialise_task, normalise_task_name
+from .templates import copy_example_images, write_task_yaml
 
 log = logging.getLogger(__name__)
 CWD = Path.cwd()
@@ -31,7 +32,7 @@ def test(
         if not test_for_file(config):
             log.error("No task configuration file found (task.yaml or task.yml)")
             log.error("Are you sure you are in the task directory?")
-            raise FileNotFoundError("No task configuration file found (task.yaml or task.yml)")
+            return
 
     task = deserialise_task(Path(config).read_text())
     log.info(f"Loaded task: {task.name}")
@@ -58,7 +59,7 @@ def test(
                 try_build_image(image_tag, pod.image.build_context, build_args, verbose)
             except Exception as e:
                 log.error(f"Failed to build image '{image_tag}' for pod '{pod.name}': {e}")
-                raise e
+                return
 
     # Attempt to set up the entire task environment
     if up:
@@ -71,6 +72,22 @@ def test(
             ),
         )
     log.info("Task test completed.")
+
+
+def init(
+    name: Annotated[str, typer.Argument(help="Name of the task")],
+    path: Annotated[Path, typer.Argument(help="Path to the task")] = CWD,
+) -> None:
+    log.info(f"Initializing new task '{name}' at '{path}'...")
+    out_dir = path / normalise_task_name(name)
+    if out_dir.exists():
+        log.error(f"Directory '{out_dir}' already exists.")
+        return
+    out_dir.mkdir(parents=True)
+    log.info(f"Writing task template to '{out_dir}'...")
+    write_task_yaml(out_dir, name)
+    log.info(f"Copying example images to '{out_dir}'...")
+    copy_example_images(out_dir)
 
 
 def useless_gradient_function(step: int) -> str:

@@ -24,3 +24,10 @@ max-complexity = 10
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
+
+[[tool.uv.index]]
+name = "mctf2025"
+url = "https://git.0x10.lv/api/packages/towergame/pypi"
+publish-url = "https://git.0x10.lv/api/packages/towergame/pypi"
+explicit = true
+authenticate = "always"
