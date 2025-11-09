@@ -108,7 +108,7 @@ def create_env(task: Task) -> list[tuple[Pod, Container]]:
                 env_vars = {env.name: env.value for env in task.env_vars or [] if env.pod_name == pod.name}
                 testing = getattr(pod, "testing", None)
                 exposed_ports = {
-                    port.split(":")[0]: int(port.split(":")[1])
+                    port.split(":")[1]: int(port.split(":")[0])
                     for port in (testing.exposed_ports if testing and testing.exposed_ports else [])
                 }
 
