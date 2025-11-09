@@ -1,4 +1,6 @@
+import colorsys
 import logging
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -71,6 +73,19 @@ def test(
     log.info("Task test completed.")
 
 
+def useless_gradient_function(step: int) -> str:
+    # Calculate hue based on step
+    hue = (step * 3 % 360) / 360.0
+    # Convert hue to RGB
+    red, green, blue = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+    # Output as ANSI
+    return f"\x1b[38;2;{int(red * 255)};{int(green * 255)};{int(blue * 255)}m"
+
+
 # Load bearing function, do not remove :3
 def epic() -> None:
-    log.info("[bold magenta]Epic function called![/bold magenta]")
+    step = 0
+    while True:
+        print(f"\r{useless_gradient_function(step)}Epic function executed successfully.\x1b[0m", end="")
+        step += 1
+        time.sleep(0.1)
