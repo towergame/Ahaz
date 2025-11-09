@@ -27,7 +27,7 @@ combine-as-imports = true
 
 [[tool.uv.index]]
 name = "mctf2025"
-url = "https://git.0x10.lv/api/packages/towergame/pypi"
+url = "https://git.0x10.lv/api/packages/towergame/pypi/simple"
 publish-url = "https://git.0x10.lv/api/packages/towergame/pypi"
 explicit = true
 authenticate = "always"
