@@ -19,10 +19,16 @@ CWD = Path.cwd()
 
 
 def test(
-    build: Annotated[bool, typer.Option("--build", "-b", help="Always build Docker images")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose logging")] = False,
-    up: Annotated[bool, typer.Option("--up", "-u", help="Start the task environment after testing")] = False,
+    build: Annotated[bool, typer.Option("--build", "-b", help="Always build Docker images.")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose logging.")] = False,
+    up: Annotated[bool, typer.Option("--up", "-u", help="Start the task environment after testing.")] = False,
 ) -> None:
+    """
+    Test the task configuration by validating the config file and attempting to build task images.
+
+    Optionally starts the task environment after testing.
+    """
+
     if verbose:
         log.setLevel(logging.DEBUG)
 
@@ -75,9 +81,19 @@ def test(
 
 
 def init(
-    name: Annotated[str, typer.Argument(help="Name of the task")],
-    path: Annotated[Path, typer.Argument(help="Path to the task")] = CWD,
+    name: Annotated[str, typer.Argument(help="Name of the task.")],
+    path: Annotated[Path, typer.Argument(help="Path to the task.", show_default=False)] = CWD,
 ) -> None:
+    """
+    Initialize a new task directory with a template configuration and an example image.
+
+    Creates the following structure:\n
+    <out_dir>/\n
+    ├─task.yaml\n
+    └─hello-world/\n
+    ....└──Dockerfile\n
+    """
+
     log.info(f"Initializing new task '{name}' at '{path}'...")
     out_dir = path / normalise_task_name(name)
     if out_dir.exists():
@@ -101,6 +117,10 @@ def useless_gradient_function(step: int) -> str:
 
 # Load bearing function, do not remove :3
 def epic() -> None:
+    """
+    A very important function.
+    """
+
     step = 0
     while True:
         print(f"\r{useless_gradient_function(step)}Epic function executed successfully.\x1b[0m", end="")

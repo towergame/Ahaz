@@ -1,12 +1,13 @@
 [project]
 name = "ahaz_cli"
-version = "0.0.1"
+version = "0.0.4"
 description = "Command-line management interface for Ahaz"
 dependencies = [
     "docker>=7.1.0",
     "rich>=14.2.0",
     "typer>=0.20.0",
-    "ahaz_common"
+    "ahaz_common",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.uv.sources]
@@ -19,7 +20,7 @@ ahaz = "ahaz_cli.cli:app"
 include-package-data = true
 
 [tool.setuptools.package-data]
-"ahaz_cli" = ["assets/*"]
+"ahaz_cli" = ["assets/**"]
 
 [tool.setuptools.packages.find]
 include = ["ahaz_cli*"]

@@ -22,6 +22,7 @@ source = { virtual = "ahaz_cli" }
 dependencies = [
     { name = "ahaz-common" },
     { name = "docker" },
+    { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -30,6 +31,7 @@ dependencies = [
 requires-dist = [
     { name = "ahaz-common", editable = "ahaz_common" },
     { name = "docker", specifier = ">=7.1.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "typer", specifier = ">=0.20.0" },
 ]
