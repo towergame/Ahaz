@@ -6,4 +6,20 @@ dependencies = [
     "docker>=7.1.0",
     "rich>=14.2.0",
     "typer>=0.20.0",
+    "ahaz_common"
 ]
+
+[tool.uv.sources]
+ahaz_common = { workspace = true }
+
+[project.scripts]
+ahaz = "ahaz_cli.cli:app"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"ahaz_cli" = ["assets/*"]
+
+[tool.setuptools.packages.find]
+include = ["ahaz_cli*"]

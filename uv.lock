@@ -20,6 +20,7 @@ name = "ahaz-cli"
 version = "0.0.1"
 source = { virtual = "ahaz_cli" }
 dependencies = [
+    { name = "ahaz-common" },
     { name = "docker" },
     { name = "rich" },
     { name = "typer" },
@@ -27,6 +28,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ahaz-common", editable = "ahaz_common" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "rich", specifier = ">=14.2.0" },
     { name = "typer", specifier = ">=0.20.0" },
