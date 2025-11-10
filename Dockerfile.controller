@@ -32,6 +32,18 @@ RUN uv sync --all-packages
 COPY ahaz_k8s_controller /app/ahaz_k8s_controller/
 COPY ahaz_common /app/ahaz_common/
 
+# Get EasyRSA
+RUN set -eux; \
+  EASYRSA_TAG="v3.1.0"; \
+  EASYRSA_NAME="EasyRSA-${EASYRSA_TAG#v}.tgz"; \
+  URL="https://github.com/OpenVPN/easy-rsa/releases/download/${EASYRSA_TAG}/${EASYRSA_NAME}"; \
+  mkdir -p /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v}; \
+  curl -fsSL "$URL" -o /tmp/$EASYRSA_NAME; \
+  tar -xzf /tmp/$EASYRSA_NAME -C /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v} --strip-components=1; \
+  rm /tmp/$EASYRSA_NAME; \
+  ln -sf /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v}/easyrsa /usr/local/bin/easyrsa; \
+  chmod +x /usr/local/bin/easyrsa
+
 RUN uv sync --all-packages
 
 # Run the server
