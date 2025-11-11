@@ -293,6 +293,7 @@ def autogenerate():
         sleep(1)
         status_user = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
         status_team = dboperator.get_registration_progress_team(request_data.team_id)
+        # FIXME: use json.dumps or plain json response
         return (
             '{ "message":"Started team and user creation as a thread","team_status":"'
             + str(status_team)
@@ -302,6 +303,7 @@ def autogenerate():
         )
 
     status_team = dboperator.get_registration_progress_team(request_data.team_id)
+    # FIXME: use json.dumps or plain json response
     return (
         '{ "message":"team creation thread is already running", "team_status":"'
         + str(status_team)
