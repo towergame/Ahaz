@@ -10,9 +10,8 @@ import certmanager
 import controller
 import dboperator
 import uvicorn
-from asgiref.wsgi import WsgiToAsgi
 from events import RedisEventManager
-from flask import Flask, request
+from quart import Quart, request
 from pydantic import ValidationError
 
 from ahaz_common import (
@@ -26,7 +25,7 @@ CERT_DIR_CONTAINER = getenv("CERT_DIR_CONTAINER", "/etc/ahaz/certs/")
 PUBLIC_DOMAINNAME = getenv("PUBLIC_DOMAINNAME", "ahaz.lan")
 TEAM_PORT_RANGE_START = int(getenv("TEAM_PORT_RANGE_START", 31200))
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 REDIS_URL = getenv("REDIS_URL", "redis://localhost:6379")
 redis_event_manager = RedisEventManager(REDIS_URL)
@@ -44,9 +43,9 @@ logging.getLogger("kubernetes").setLevel(logging.INFO)
 
 
 @app.route("/start_challenge", methods=["POST", "GET"])
-def start_challenge():
+async def start_challenge():
     try:
-        request_data = ChallengeRequest(**request.get_json())
+        request_data = ChallengeRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -62,9 +61,9 @@ def start_challenge():
 
 
 @app.route("/stop_challenge", methods=["POST", "GET"])
-def stop_challenge():
+async def stop_challenge():
     try:
-        request_data = ChallengeRequest(**request.get_json())
+        request_data = ChallengeRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -84,9 +83,9 @@ def get_challenges():
 
 
 @app.route("/get_pods_namespace", methods=["GET"])
-def get_pods_namespace():
+async def get_pods_namespace():
     try:
-        request_data = TeamRequest(**request.get_json())
+        request_data = TeamRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -112,9 +111,9 @@ def register_user_threaded(request_data: UserRequest):
 
 
 @app.route("/add_user", methods=["POST"])
-def adduser():
+async def adduser():
     try:
-        request_data = UserRequest(**request.get_json())
+        request_data = UserRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -129,9 +128,9 @@ def adduser():
 
 
 @app.route("/get_user", methods=["GET"])
-def getuser():
+async def getuser():
     try:
-        request_data = UserRequest(**request.get_json())
+        request_data = UserRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -164,9 +163,9 @@ def gen_team_from_flask_for_subprocess(request_data: RegisterTeamRequest) -> str
 
 
 @app.route("/gen_team", methods=["POST"])
-def team_post():
+async def team_post():
     try:
-        request_data = RegisterTeamRequest(**request.get_json())
+        request_data = RegisterTeamRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -178,12 +177,13 @@ def team_post():
 
 def set_registration_progress(team_id: str, user_id: str, progress: int) -> None:
     dboperator.set_registration_progress_team(team_id, user_id, progress)
-    publish_event(
-        {
-            "type": "registration_progress",
-            "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
-        }
-    )
+    
+    future = redis_event_manager.publish_event("ahaz_events", json.dumps({
+        "type": "registration_progress",
+        "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
+    }))
+    # Block until published
+    asyncio.run(future) # FIXME: do this better
 
 
 def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
@@ -277,9 +277,9 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
 
 
 @app.route("/autogenerate", methods=["POST", "GET"])
-def autogenerate():
+async def autogenerate():
     try:
-        request_data = UserRequest(**request.get_json())
+        request_data = UserRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -293,7 +293,7 @@ def autogenerate():
         status_user == "null"
     ):  # if progress is null, only then start the thread, otherwise give info about progress
         Thread(target=autogenerate_subprocess, args=(request_data,), daemon=True).start()
-        sleep(1)
+        sleep(1) # FIXME: don't use sleep
         status_user = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
         status_team = dboperator.get_registration_progress_team(request_data.team_id)
         # FIXME: use json.dumps or plain json response
@@ -342,9 +342,9 @@ def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=Fals
 
 # TODO: add token
 @app.route("/regenerate", methods=["POST"])
-def regenerate():
+async def regenerate():
     try:
-        request_data = UserRequest(**request.get_json())
+        request_data = UserRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
@@ -359,57 +359,39 @@ def regenerate():
 
 # TODO: add token
 @app.route("/del_team", methods=["POST"])
-def del_team():
-    request_data_json = request.get_json()
-    request_data = json.dumps(request_data_json)
-    teamname = request_data_json["teamname"]
-
+async def del_team():
     try:
-        request_data = TeamRequest(**request.get_json())
+        request_data = TeamRequest(**await request.get_json())
     except ValidationError as e:
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
 
     Thread(target=del_team_subprocess, args=(request_data,), daemon=True).start()
+
+    teamname = request_data.team_id
     return f"Started a thread for deletion of team {teamname}"
 
 
 @app.route("/events", methods=["GET"])
-def events():
-    def event_stream():
+async def events():
+    async def event_stream():
+        # Immediate ping to establish connection and send headers
+        yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
         pubsub = redis_event_manager.subscribe()
-        pubsub.subscribe("ahaz_events")
+        logger.debug("subscribing to ahaz_events channel")
+        await pubsub.subscribe("ahaz_events")
+        logger.debug("listening to events")
+        async for message in pubsub.listen():
+            logger.debug(f"got message: {message}")
+            if message is None:
+                yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
+                continue
 
-        loop = asyncio.new_event_loop()
+            if message["type"] == "message":
+                data = message["data"].decode("utf-8")
+                yield f"{data}\n"
 
-        try:
-            ticks = 0
-            while True:
-                ticks += 1
-
-                if ticks % 50 == 0:
-                    yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
-
-                message = pubsub.get_message(timeout=0.1)
-                if message is None:
-                    loop.run_until_complete(asyncio.sleep(0.1))
-                    continue
-
-                if message["type"] == "message":
-                    data = message["data"].decode("utf-8")
-                    yield f"{data}\n"
-        finally:
-            pubsub.unsubscribe("ahaz_events")
-            pubsub.close()
-
-    return app.response_class(event_stream(), 200, {"Content-Type": "text/event-stream"})
-
-
-def publish_event(event_data: dict) -> None:
-    redis_event_manager.publish_event("ahaz_events", json.dumps(event_data))
-
-
-asgi = WsgiToAsgi(app)
+    return (event_stream(), 200, {"Content-Type": "text/event-stream"})
 
 if __name__ == "__main__":
-    uvicorn.run("server:asgi", host="0.0.0.0", port=5000, workers=4)
+    uvicorn.run("server:app", host="0.0.0.0", port=5000, workers=1)

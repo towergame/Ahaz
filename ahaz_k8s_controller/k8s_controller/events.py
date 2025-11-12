@@ -1,7 +1,6 @@
 import logging
 
-import redis
-from redis import StrictRedis
+from redis.asyncio import StrictRedis
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +17,8 @@ class RedisEventManager:
             self._redis_client = StrictRedis.from_url(self.redis_url)
         return self._redis_client
 
-    def publish_event(self, channel: str, message: str):
-        self.redis_client.publish(channel, message)
+    async def publish_event(self, channel: str, message: str):
+        await self.redis_client.publish(channel, message)
 
     def subscribe(self):
         return self.redis_client.pubsub()
