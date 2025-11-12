@@ -17,7 +17,7 @@ source = { virtual = "." }
 
 [[package]]
 name = "ahaz-cli"
-version = "0.0.1"
+version = "0.0.4"
 source = { virtual = "ahaz_cli" }
 dependencies = [
     { name = "ahaz-common" },
