@@ -188,9 +188,12 @@ def set_registration_progress(team_id: str, user_id: str, progress: int) -> None
 
 def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
     if port == -1:
-        port = (
-            int(dboperator.get_last_port()) + 1
-        )  # FIXME: Reinstate the mapping based on (BASE_PORT + TEAM_ID)
+        try:
+            port = (
+                int(dboperator.get_last_port()) + 1
+            )  # FIXME: Reinstate the mapping based on (BASE_PORT + TEAM_ID)
+        except:
+            port = TEAM_PORT_RANGE_START
     try:
         if dboperator.get_registration_progress_team(request_data.team_id) == 10:
             return "team is being reregistered"
