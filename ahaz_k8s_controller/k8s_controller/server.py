@@ -175,18 +175,16 @@ async def team_post():
     return "Started team creation as a thread"
 
 
-def set_registration_progress(team_id: str, user_id: str, progress: int) -> None:
+async def set_registration_progress(team_id: str, user_id: str, progress: int) -> None:
     dboperator.set_registration_progress_team(team_id, user_id, progress)
     
-    future = redis_event_manager.publish_event("ahaz_events", json.dumps({
+    await redis_event_manager.publish_event("ahaz_events", json.dumps({
         "type": "registration_progress",
         "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
     }))
-    # Block until published
-    asyncio.run(future) # FIXME: do this better
 
 
-def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
+async def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
     if port == -1:
         try:
             port = (
@@ -201,47 +199,47 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
         if (
             dboperator.get_registration_progress_team(request_data.team_id) == -999
         ):  # if no team has been registered, register it
-            set_registration_progress(request_data.team_id, request_data.user_id, 1)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 1)
             logger.debug("started registration proces for a team")
 
             certmanager.gen_team(request_data.team_id, PUBLIC_DOMAINNAME, port, "tcp", CERT_DIR_CONTAINER)
-            set_registration_progress(request_data.team_id, request_data.user_id, 2)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 2)
             logger.debug(f"generated certificates for team {request_data.team_id}")
 
             controller.create_team_namespace(request_data.team_id)
             logger.debug(f"created namespace for team {request_data.team_id}")
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 3)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 3)
             controller.create_team_vpn_container(request_data.team_id)
             logger.debug(f"created VPN Container for team {request_data.team_id}")
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 4)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 4)
             controller.expose_team_vpn_container(request_data.team_id, port)
             logger.debug(f"exposed VPN Container for team {request_data.team_id}")
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 5)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 5)
             logger.debug("mystical 5th step performed")
 
             dboperator.insert_team_into_db(request_data.team_id)
             dboperator.insert_vpn_port_into_db(request_data.team_id, port)
             logger.debug(f"inserted data into db for team {request_data.team_id}")
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 6)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 6)
             logger.info(f"Successfully registered a team {request_data.team_id}")
         elif (
             dboperator.get_registration_progress_team(request_data.team_id) < 6
         ):  # status is less than 6, means that team is being registered, so wait while it is being done
-            set_registration_progress(request_data.team_id, request_data.user_id, 0)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 0)
 
             while dboperator.get_registration_progress_team(request_data.team_id) < 6:
                 logger.info(f"waiting for team {request_data.team_id} user {request_data.user_id}")
                 sleep(5)
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 6)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 6)
         elif (
             dboperator.get_registration_progress_team(request_data.team_id) >= 6
         ):  # if team is already registered, then
-            set_registration_progress(request_data.team_id, request_data.user_id, 6)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 6)
 
         teststatus = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
         logger.debug(teststatus)
@@ -256,16 +254,16 @@ def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
             dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id) == 6
         ):  # if user isn't registered or this was the user that first called the team registration
             logger.debug("about to register user ovpn config")
-            set_registration_progress(request_data.team_id, request_data.user_id, 7)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 7)
             controller.register_user_ovpn(request_data.team_id, request_data.user_id)
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 8)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 8)
             logger.debug("about to obtain config")
             config = controller.obtain_user_ovpn_config(request_data.team_id, request_data.user_id)
             logger.debug("about to insert config into db")
             dboperator.insert_user_vpn_config(request_data.team_id, request_data.user_id, config)
 
-            set_registration_progress(request_data.team_id, request_data.user_id, 9)
+            await set_registration_progress(request_data.team_id, request_data.user_id, 9)
             logger.debug("successfully added a user to db")
             logger.info(f"Registered user {request_data.user_id} to team {request_data.team_id}")
             return "successfully added a user to db"
@@ -284,36 +282,24 @@ async def autogenerate():
         logger.error(f"Validation error: {e}")
         return "Invalid request data", 400
 
-    # teamExists=dboperator.get_team_id(teamname)
-    # if(teamExists != "null"):
-    #    return "team already exists"
-
     status_user = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
-    if (
-        status_user == "null"
-    ):  # if progress is null, only then start the thread, otherwise give info about progress
-        Thread(target=autogenerate_subprocess, args=(request_data,), daemon=True).start()
-        sleep(1) # FIXME: don't use sleep
-        status_user = dboperator.get_registration_progress_user(request_data.team_id, request_data.user_id)
-        status_team = dboperator.get_registration_progress_team(request_data.team_id)
-        # FIXME: use json.dumps or plain json response
-        return (
-            '{ "message":"Started team and user creation as a thread","team_status":"'
-            + str(status_team)
-            + '", "user_status":"'
-            + str(status_user)
-            + '"}'
-        )
+
+    if status_user == "null":
+        # if progress is null, only then start the thread
+        Thread(target=asyncio.run, args=(autogenerate_subprocess(request_data),), daemon=True).start()
 
     status_team = dboperator.get_registration_progress_team(request_data.team_id)
-    # FIXME: use json.dumps or plain json response
-    return (
-        '{ "message":"team creation thread is already running", "team_status":"'
-        + str(status_team)
-        + '", "user_status":"'
-        + str(status_user)
-        + '"}'
-    )
+
+    if str(status_team) == "-999":
+        status_team = "1"  # set to 1 because thread has possibly just started
+    
+    if str(status_user) == "null":
+        status_user = "1"  # set to 1 because thread has possibly just started
+
+    return json.dumps({
+        "team_status": str(status_team),
+        "user_status": str(status_user),
+    })
 
 
 def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=False) -> None:
