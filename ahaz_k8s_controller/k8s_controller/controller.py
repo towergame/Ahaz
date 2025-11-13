@@ -11,6 +11,7 @@ from kubernetes import config, watch
 from kubernetes.client import (
     CoreV1Api,
     NetworkingV1Api,
+    V1Affinity,
     V1Capabilities,
     V1ConfigMap,
     V1ConfigMapVolumeSource,
@@ -27,6 +28,8 @@ from kubernetes.client import (
     V1NetworkPolicyPeer,
     V1NetworkPolicyPort,
     V1NetworkPolicySpec,
+    V1NodeAffinity,
+    V1NodeSelector,
     V1ObjectMeta,
     V1Pod,
     V1PodList,
@@ -244,7 +247,27 @@ def start_challenge_pod(
                         ),
                     )
                 ],
-                tolerations=[V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="task")],
+                tolerations=[
+                    V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="task"),
+                    V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="shared"),
+                ],
+                affinity=V1Affinity(
+                    node_affinity=V1NodeAffinity(
+                        required_during_scheduling_ignored_during_execution=V1NodeSelector(
+                            node_selector_terms=[
+                                {
+                                    "match_expressions": [
+                                        {
+                                            "key": "ahaz-controller/node-role",
+                                            "operator": "In",
+                                            "values": ["task", "shared"],
+                                        }
+                                    ]
+                                }
+                            ]
+                        )
+                    )
+                ),
                 image_pull_secrets=[{"name": K8S_IMAGEPULLSECRET_NAME}],
             ),
         )
@@ -749,7 +772,27 @@ def create_team_vpn_container(teamname: str) -> None:
                     ),
                     V1Volume(name="dev-net-tun", host_path=V1HostPathVolumeSource(path="/dev/net/tun")),
                 ],
-                tolerations=[V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="vpn")],
+                tolerations=[
+                    V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="vpn"),
+                    V1Toleration(key="ahaz-controller/node-role", operator="Equal", value="shared"),
+                ],
+                affinity=V1Affinity(
+                    node_affinity=V1NodeAffinity(
+                        required_during_scheduling_ignored_during_execution=V1NodeSelector(
+                            node_selector_terms=[
+                                {
+                                    "match_expressions": [
+                                        {
+                                            "key": "ahaz-controller/node-role",
+                                            "operator": "In",
+                                            "values": ["vpn", "shared"],
+                                        }
+                                    ]
+                                }
+                            ]
+                        )
+                    )
+                ),
             ),
         )
         core_api.create_namespaced_pod(body=pod_manifest, namespace=teamname)
