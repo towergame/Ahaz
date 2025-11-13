@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import logging.config
 from os import getenv
 from threading import Thread
 from time import sleep
@@ -11,7 +10,7 @@ import controller
 import dboperator
 import uvicorn
 from events import RedisEventManager
-from quart import Quart, request
+from quart import Quart, make_response, request
 from pydantic import ValidationError
 
 from ahaz_common import (
@@ -40,6 +39,7 @@ logger = logging.getLogger()
 
 # Set kubernetes client logging level to INFO to reduce verbosity
 logging.getLogger("kubernetes").setLevel(logging.INFO)
+logging.getLogger("mysql").setLevel(logging.INFO)
 
 
 @app.route("/start_challenge", methods=["POST", "GET"])
@@ -376,22 +376,46 @@ async def del_team():
 async def events():
     async def event_stream():
         # Immediate ping to establish connection and send headers
-        yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
+        yield f":keepalive\n\n"
         pubsub = redis_event_manager.subscribe()
-        logger.debug("subscribing to ahaz_events channel")
         await pubsub.subscribe("ahaz_events")
-        logger.debug("listening to events")
-        async for message in pubsub.listen():
-            logger.debug(f"got message: {message}")
+        while True:
+            # pubsub.listen() would work here, but it doesn't timeout and we should send
+            # keepalive pings in case the client thinks the connection is dead
+            message = await pubsub.get_message(timeout=5)
             if message is None:
-                yield f"{json.dumps({'type': 'heartbeat', 'data': 'ping'})}\n"
+                yield f":keepalive\n\n"
                 continue
 
             if message["type"] == "message":
-                data = message["data"].decode("utf-8")
-                yield f"{data}\n"
+                try:
+                    parsed = json.loads(message["data"].decode("utf-8"))
+                except:
+                    # Invalid data provided.
+                    continue
+                response = ""
+                data = json.dumps(parsed["data"])
+                for line in data.splitlines():
+                    response += f"data: {line}\n"
+                response += f"event: {parsed["type"]}\n"
+                yield f"{response}\n" # We trust that no one else is writing to the Redis publisher and we only write valid JSON
 
-    return (event_stream(), 200, {"Content-Type": "text/event-stream"})
+    response = await make_response(event_stream(), 200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Transfer-Encoding": "chunked",
+    })
+
+    # Disable timeout for long-lived connections (trust me, the attribute exists. don't listen to the type checker)
+    response.timeout = None  # type: ignore
+
+    return response
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=5000, workers=1)
+    Thread(
+        # This is an async function, but we are in a thread, so we need to run it in an event loop
+        target=asyncio.run,
+        args=(controller.k8s_watcher(redis_event_manager),),
+        daemon=True,
+    ).start()
+    uvicorn.run("server:app", host="0.0.0.0", port=5000, workers=4)
