@@ -41,6 +41,9 @@ logger = logging.getLogger()
 logging.getLogger("kubernetes").setLevel(logging.INFO)
 logging.getLogger("mysql").setLevel(logging.INFO)
 
+@app.route("/ping", methods=["GET"])
+def ping():
+    return "pong", 200, { "Content-Type": "text/plain" }
 
 @app.route("/start_challenge", methods=["POST", "GET"])
 async def start_challenge():
