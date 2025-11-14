@@ -30,6 +30,8 @@ from kubernetes.client import (
     V1NetworkPolicySpec,
     V1NodeAffinity,
     V1NodeSelector,
+    V1NodeSelectorRequirement,
+    V1NodeSelectorTerm,
     V1ObjectMeta,
     V1Pod,
     V1PodList,
@@ -255,15 +257,15 @@ def start_challenge_pod(
                     node_affinity=V1NodeAffinity(
                         required_during_scheduling_ignored_during_execution=V1NodeSelector(
                             node_selector_terms=[
-                                {
-                                    "match_expressions": [
-                                        {
-                                            "key": "ahaz-controller/node-role",
-                                            "operator": "In",
-                                            "values": ["task", "shared"],
-                                        }
+                                V1NodeSelectorTerm(
+                                    match_expressions=[
+                                        V1NodeSelectorRequirement(
+                                            key="ahaz-controller/node-role",
+                                            operator="In",
+                                            values=["task", "shared"],
+                                        )
                                     ]
-                                }
+                                )
                             ]
                         )
                     )
@@ -780,15 +782,15 @@ def create_team_vpn_container(teamname: str) -> None:
                     node_affinity=V1NodeAffinity(
                         required_during_scheduling_ignored_during_execution=V1NodeSelector(
                             node_selector_terms=[
-                                {
-                                    "match_expressions": [
-                                        {
-                                            "key": "ahaz-controller/node-role",
-                                            "operator": "In",
-                                            "values": ["vpn", "shared"],
-                                        }
+                                V1NodeSelectorTerm(
+                                    match_expressions=[
+                                        V1NodeSelectorRequirement(
+                                            key="ahaz-controller/node-role",
+                                            operator="In",
+                                            values=["vpn", "shared"],
+                                        )
                                     ]
-                                }
+                                )
                             ]
                         )
                     )
