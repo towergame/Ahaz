@@ -949,6 +949,10 @@ async def k8s_watcher(event_manager: events.RedisEventManager) -> None:
                 except Exception:
                     pass
 
+            if pod_status == "Failed":
+                # Hide failed status. It shows up for a split second when pod is deleted.
+                pod_status = "Terminating"
+
             if (pod.metadata.deletion_timestamp if pod.metadata else None) is not None and pod_status in (
                 "Pending",
                 "Running",
