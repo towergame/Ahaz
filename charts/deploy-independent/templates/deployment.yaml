@@ -4,21 +4,27 @@ metadata:
   name: {{ include "ahaz-k8s-controller.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "ahaz-k8s-controller.labels" . | nindent 4 }}
+    {{ include "ahaz-k8s-controller.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
   selector:
     matchLabels:
-      {{- include "ahaz-k8s-controller.selectorLabels" . | nindent 6 }}
+      {{ include "ahaz-k8s-controller.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: controller
   template:
     metadata:
       labels:
-        {{- include "ahaz-k8s-controller.selectorLabels" . | nindent 8 }}
+        {{ include "ahaz-k8s-controller.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: controller
     spec:
       serviceAccountName: {{ include "ahaz-k8s-controller.serviceAccountName" . }}
       autoMountServiceAccountToken: true
+      {{- if .Values.controller.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.controller.image.pullSecrets }}
+        - name: {{ .name }}
+        {{- end }}
+      {{- end }}
       volumes:
         - name: certs-volume
           persistentVolumeClaim:
@@ -26,10 +32,6 @@ spec:
       containers:
         - name: k8s-controller
           image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
-          {{-if .Values.controller.image.pullSecrets }}
-          imagePullSecrets:
-            - name: {{ .Values.controller.image.pullSecrets }}
-          {{- end }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
           ports:
             - containerPort: 5000
@@ -40,7 +42,7 @@ spec:
               readOnly: false
           env:
             - name: DB_IP
-              value: "{{- if .Values.database.enabled }}{{ printf "%s-db.%s" (include "ahaz-k8s-controller.fullname" .) .Release.Namespace }}{{- else }}{{ .Values.controller.database.external.host }}{{- end }}"
+              value: {{ if .Values.database.enabled }}"{{ printf "%s-db.%s" (include "ahaz-k8s-controller.fullname" .) .Release.Namespace }}"{{ else }}"{{ .Values.controller.database.external.host }}"{{ end }}
             - name: DB_DBNAME
               value: "{{ .Values.database.name }}"
             - name: DB_USERNAME

@@ -9,8 +9,8 @@ controller:
     # Overrides the image tag whose default is the chart appVersion.
     tag: "latest"
     # Pull secrets for private registries.
-    # pullSecrets:
-    # - name: "regcred"
+    pullSecrets:
+    - name: "regcred"
 
   volumes:
     certs:
