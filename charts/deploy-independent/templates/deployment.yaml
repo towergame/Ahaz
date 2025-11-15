@@ -26,6 +26,10 @@ spec:
       containers:
         - name: k8s-controller
           image: "{{ .Values.controller.image.repository }}:{{ .Values.controller.image.tag }}"
+          {{-if .Values.controller.image.pullSecrets }}
+          imagePullSecrets:
+            - name: {{ .Values.controller.image.pullSecrets }}
+          {{- end }}
           imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
           ports:
             - containerPort: 5000
