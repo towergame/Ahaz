@@ -10,8 +10,8 @@ import controller
 import dboperator
 import uvicorn
 from events import RedisEventManager
-from quart import Quart, make_response, request
 from pydantic import ValidationError
+from quart import Quart, make_response, request
 
 from ahaz_common import (
     ChallengeRequest,
@@ -41,9 +41,11 @@ logger = logging.getLogger()
 logging.getLogger("kubernetes").setLevel(logging.INFO)
 logging.getLogger("mysql").setLevel(logging.INFO)
 
+
 @app.route("/ping", methods=["GET"])
 def ping():
-    return "pong", 200, { "Content-Type": "text/plain" }
+    return "pong", 200, {"Content-Type": "text/plain"}
+
 
 @app.route("/start_challenge", methods=["POST", "GET"])
 async def start_challenge():
@@ -180,19 +182,22 @@ async def team_post():
 
 async def set_registration_progress(team_id: str, user_id: str, progress: int) -> None:
     dboperator.set_registration_progress_team(team_id, user_id, progress)
-    
-    await redis_event_manager.publish_event("ahaz_events", json.dumps({
-        "type": "registration_progress",
-        "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
-    }))
+
+    await redis_event_manager.publish_event(
+        "ahaz_events",
+        json.dumps(
+            {
+                "type": "registration_progress",
+                "data": {"team_id": team_id, "user_id": user_id, "progress": progress},
+            }
+        ),
+    )
 
 
 async def autogenerate_subprocess(request_data: UserRequest, port=-1) -> str:
     if port == -1:
         try:
-            port = (
-                int(dboperator.get_last_port()) + 1
-            )  # FIXME: Reinstate the mapping based on (BASE_PORT + TEAM_ID)
+            port = TEAM_PORT_RANGE_START + 1  # FIXME: Reinstate the mapping based on (BASE_PORT + TEAM_ID)
         except:
             port = TEAM_PORT_RANGE_START
     try:
@@ -295,14 +300,16 @@ async def autogenerate():
 
     if str(status_team) == "-999":
         status_team = "1"  # set to 1 because thread has possibly just started
-    
+
     if str(status_user) == "null":
         status_user = "1"  # set to 1 because thread has possibly just started
 
-    return json.dumps({
-        "team_status": str(status_team),
-        "user_status": str(status_user),
-    })
+    return json.dumps(
+        {
+            "team_status": str(status_team),
+            "user_status": str(status_user),
+        }
+    )
 
 
 def del_team_subprocess(request_data: UserRequest | TeamRequest, reregister=False) -> None:
@@ -386,19 +393,24 @@ async def events():
                 data = json.dumps(parsed["data"])
                 for line in data.splitlines():
                     response += f"data: {line}\n"
-                response += f"event: {parsed["type"]}\n"
-                yield f"{response}\n" # We trust that no one else is writing to the Redis publisher and we only write valid JSON
+                response += f"event: {parsed['type']}\n"
+                yield f"{response}\n"  # We trust that no one else is writing to the Redis publisher and we only write valid JSON
 
-    response = await make_response(event_stream(), 200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Transfer-Encoding": "chunked",
-    })
+    response = await make_response(
+        event_stream(),
+        200,
+        {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Transfer-Encoding": "chunked",
+        },
+    )
 
     # Disable timeout for long-lived connections (trust me, the attribute exists. don't listen to the type checker)
     response.timeout = None  # type: ignore
 
     return response
+
 
 if __name__ == "__main__":
     Thread(
