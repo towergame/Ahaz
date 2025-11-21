@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from redis.asyncio import StrictRedis
 
@@ -18,7 +19,16 @@ class RedisEventManager:
         return self._redis_client
 
     async def publish_event(self, channel: str, message: str):
-        await self.redis_client.publish(channel, message)
+        try:
+            await self.redis_client.publish(channel, message)
+        except Exception as e:
+            logger.error(f"Error publishing event to Redis: {e}")
+            logger.error(traceback.format_exc())
 
     def subscribe(self):
         return self.redis_client.pubsub()
+
+    async def close(self):
+        if self._redis_client:
+            await self._redis_client.close()
+            self._redis_client = None
