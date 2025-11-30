@@ -37,7 +37,7 @@ In contrast to the Docker Compose deployment, the Helm chart will create a servi
 
 The deployment may be customised using the `values.yaml` file found inside the chart.
 
-The chart, for the time being, can be deployed using `helm install -n ahaz-system ahaz . -f values.yaml`. A deployed Helm chart is WIP.
+The chart, for the time being, can be deployed using `helm install -n ahaz-system ahaz . -f value-overrides.yaml` while in `charts/deploy-independent`. A deployed Helm chart is WIP.
 
 ## Host Cluster
 
