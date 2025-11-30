@@ -1,27 +1,87 @@
-# ahaz_cicd
-ahaz cicd (legacy name) - supports multi container tasks with custom network rules and environment variables.
+# Ahaz
+Ahaz is a CTF container task solution allowing teams to deploy instances of tasks in a Kubernetes cluster.
 
-# SETUP
-1. all env vars are located in docker-compose.yaml
+# Setup
 
-`CERT_DIR_HOST`= directory where users/teams vpn configs will be stored on the ahaz host machine
+There are two ways to deploy Ahaz - via Docker Compose (outside Kubernetes deployment) or via Helm Chart (in-Kubernetes deployment).
 
-`CERT_DIR_CONTAINER`= directory within the VPN container where the certificates will be located
+## Docker Compose Deployment
+The following environment variables must be set for Ahaz to function:
+- `PUBLIC_DOMAINNAME` (Default: `ahaz.lan`), the domain name through which the Ahaz VPN pods will be addressed with. It should resolve to the server(s) that will host VPN pods.
+- `K8S_IP_RANGE` (Default: `10.42.0.0 255.255.255.0`), an IP+Mask or CIDR string specifying the IP address range used within the cluster. It will be used to generate VPN certificates.
 
-`DB_IP` = IP address of ahaz challenge/task db it contains templates for challenges,pods,pod networkpolicies, env vars etc. is used for starting challenges within ahaz
-`DB_DBNAME`,`DB_USERNAME`,`DB_PASSWORD` used for connecting to said db
+The following environment variables may be set to customise Ahaz functionality:
+- `CERT_DIR_CONTAINER` (Default: `/certdir/`), specified the location of the VPN certificate directory within the container. Should only be changed if the ahaz_data directory mount is modified.
+- `DB_IP` (Default: `10.33.0.3`), IP address at which the database may be accessed.
+- `DB_DBNAME` (Default: `ahaz`), the name of the database to use.
+- `DB_USERNAME` (Default: `dbeaver`), the username for connecting to the database.
+- `DB_PASSWORD` (Default: `dbeaver`), the password for connecting to the database.
+- `REDIS_URL` (Default: `redis://10.33.0.4:6379`), the connection URL for the Redis instance.
+- `K8S_IMAGEPULLSECRET_NAME` (Default: `regcred`), the name of the Kubernetes secret used for pulling container images (useful for pulling task images from a private Docker registry).
+- `K8S_IMAGEPULLSECRET_NAMESPACE` (Default: `default`), the namespace where the image pull secret is located.
+- `TEAM_PORT_RANGE_START` (Default: `31000`), the starting port number for the range of ports allocated to teams.
+- `TEAM_BACKUP_PORT_RANGE_START` (Default: `30500`), the starting port number for the backup port range.
+- `TEAM_BACKUP_PORT_RANGE_END` (Default: `30999`), the ending port number for the backup port range.
+- `LOGLEVEL` (Default: `DEBUG`), sets the logging level for the application.
+- `OVPN_IMAGE` (Default: `lisenet/openvpn`), the Docker image to use for OpenVPN pods.
+- `OVPN_TAG` (Default: `2.6.14`), the tag for the OpenVPN Docker image.
 
-`PUBLIC_DOMAINNAME` = domain with or without subdomain that can be used for obtaining the IP address of the system running ahaz, will be written in .ovpn configs served to users
+The deployment also necessitates a valid kubectl config file located in `ahaz_data/certs/config.yml`. Alternatively, you may modify the volume mount to mount a valid kubectl config file on `/certdir` on the image.
 
-`K8S_IP_RANGE` = used for IP route in .ovpn files, should be matching with the freely used IP range in your cluster or basicly, the IPs of pods started by ahaz.
+The controller can be started using `docker compose up`, much like any other Docker Compose project.
 
-`VERBOSE` = "True" or "false" as a string, not as boolean, useful for when first setting up the ahaz, basicly shows random print statements of ahaz running functions. if set to false, errors will still be printed, and some info, like registration of teams and registration of users will still be printed to terminal running the ahaz through docker-compose. 
+## Helm Deployment
+The Helm deployment can be found under `charts/deploy-independent`. The Helm chart requires that you have [Kyverno](https://kyverno.io/) installed in your cluster.
 
-2. add kubeconfig contents to test_kube/config such that ahaz will be able to communicate with the k8s cluster
-3. docker compose up 
-# Updating/inserting challenges
-in docker-compose.yaml 
+In contrast to the Docker Compose deployment, the Helm chart will create a service account with the minimum required permissions to be able to perform full Ahaz functionality, permissions in namespaces are automatically added via Kyverno.
+
+The deployment may be customised using the `values.yaml` file found inside the chart.
+
+The chart, for the time being, can be deployed using `helm install -n ahaz-system ahaz . -f values.yaml`. A deployed Helm chart is WIP.
+
+## Host Cluster
+
+In addition to deploying Ahaz either through Docker Compose or through Helm, it is also necessary to configure the cluster which will host Ahaz namespaces.
+
+As a bare minimum, it is necessary to apply the respective taints and labels to nodes that will be used to host the VPN and task pods.
+
+The following taints may be applied to nodes:
+- `ahaz-controller/node-role` - role of the node in Ahaz; may be either `PreferNoSchedule`, `NoSchedule` or `NoExecute` depending on the threat model
+  - `vpn` - This node is provisioned to host VPN pods.
+  - `task` - This node is provisioned to host task pods.
+  - `shared` - This node is shared between both task and VPN pods. 
+
+The following labels may be applied to nodes:
+- `ahaz-controller/node-role` - role of the node in Ahaz
+  - `vpn` - This node may host VPN pods.
+  - `task` - This node may host task pods.
+  - `shared` - This node may host both task and VPN pods.
+  - `unmanaged` - This node is not to be used by Ahaz.
+
+### Examples
+#### Single-node setup
 ```
+kubectl label nodes <node-name> ahaz-controller/node-role=shared
+```
+
+#### Multi-node setup
+On every VPN node:
+```
+kubectl taint nodes <node-name> ahaz-controller/node-role=NoExecute:vpn
+kubectl label nodes <node-name> ahaz-controller/node-role=vpn
+```
+
+On every task node:
+```
+kubectl taint nodes <node-name> ahaz-controller/node-role=NoExecute:task
+kubectl label nodes <node-name> ahaz-controller/node-role=task
+```
+
+# Updating/Inserting Challenges
+To update or insert challenges into the Ahaz database, you may use a MySQL client to connect to the database and execute the necessary SQL commands.
+
+If your deployment is running via Docker Compose, you may temporarily expose the database port by uncommenting the relevant lines in `docker-compose.yaml`:
+```yaml
 k8s_controller_db:
     ...
     networks:
@@ -29,5 +89,9 @@ k8s_controller_db:
 #       default 
 #    ports:
 #     - "3306:3306"
+``` 
+
+If your deployment is running via Helm, you may port-forward the database service to your local machine:
 ```
-default network and ports have been commented out. If you are updating tasks in db, uncomment the 3 lines such that db is accessible from outside, and cicd pusher can do its work, afterwards comment it back as not to leave db exposed to internet
+kubectl port-forward -n ahaz-system svc/ahaz-db 3306:3306
+```
