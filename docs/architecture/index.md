@@ -96,7 +96,7 @@ To do so, Ahaz consists of 4 major modules:
 - The REST API, allowing other systems (such as the CTF platform) to communicate with it.
 - The Kubernetes operator, interfacing with the Kubernetes API to create team namespaces, pods and network policies to ensure connections as defined in spec.
 - The certificate manager, generating the necessary PKI for the teams and the users within them for use with the VPN.
-- The database operator, interfacing with an SQL database to maintain a ledger of teams and the tasks they have currently launched.
+- The database operator, interfacing with an SQL database to maintain a ledger of the available tasks that can be launched via Ahaz.
 
 The modules are currently structured into a single Python program, which is interfaced via the REST API. There is a sister project providing a CTFd plugin that is able to provide interface with Ahaz to provide dynamic container tasks in CTFd.
 
