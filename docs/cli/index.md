@@ -45,7 +45,7 @@ To test a challenge locally, navigate to the challenge directory and run:
 ahaz test
 ```
 
-This will validate the `task.yaml` file and attempting to build the Docker images.
+This will validate the `task.yaml` file and attempt to build the Docker images.
 If you wish to also run the challenge, you may add the flag `-u`:
 ```bash
 ahaz test -u
