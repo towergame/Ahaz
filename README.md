@@ -31,7 +31,7 @@ The deployment also necessitates a valid kubectl config file located in `ahaz_da
 The controller can be started using `docker compose up`, much like any other Docker Compose project.
 
 ## Helm Deployment
-The Helm deployment can be found under `charts/deploy-independent`. The Helm chart requires that you have [Kyverno](https://kyverno.io/) installed in your cluster.
+The Helm deployment can be found in the [Helm chart repo](https://github.com/Martina-CTF/helm-charts). The Helm chart requires that you have [Kyverno](https://kyverno.io/) installed in your cluster.
 
 In contrast to the Docker Compose deployment, the Helm chart will create a service account with the minimum required permissions to be able to perform full Ahaz functionality, permissions in namespaces are automatically added via Kyverno.
 
