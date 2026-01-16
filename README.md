@@ -95,3 +95,7 @@ If your deployment is running via Helm, you may port-forward the database servic
 ```
 kubectl port-forward -n ahaz-system svc/ahaz-db 3306:3306
 ```
+
+# License
+
+Ahaz is distributed under [AGPL-3.0](./LICENSE).
