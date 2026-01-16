@@ -1,6 +1,6 @@
 [project]
 name = "ahaz_k8s_controller"
-version = "0.0.1"
+version = "1.0.0"
 description = "Kubernetes controller for Ahaz"
 
 dependencies = [
