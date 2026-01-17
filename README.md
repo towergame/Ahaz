@@ -37,7 +37,7 @@ In contrast to the Docker Compose deployment, the Helm chart will create a servi
 
 The deployment may be customised using the `values.yaml` file found inside the chart.
 
-The chart, for the time being, can be deployed using `helm install ahaz oci://ghcr.io/martina-ctf/helm-charts/ahaz`, values for the chart can be found [here](https://github.com/Martina-CTF/helm-charts/blob/main/charts/ahaz/values.yaml).
+The chart can be deployed using `helm install ahaz oci://ghcr.io/martina-ctf/helm-charts/ahaz`, values for the chart can be found [here](https://github.com/Martina-CTF/helm-charts/blob/main/charts/ahaz/values.yaml).
 
 ## Host Cluster
 
