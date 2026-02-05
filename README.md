@@ -99,5 +99,3 @@ kubectl port-forward -n ahaz-system svc/ahaz-db 3306:3306
 # License
 
 Ahaz is distributed under [AGPL-3.0](./LICENSE).
-
-test sentence that I should not be able to push
