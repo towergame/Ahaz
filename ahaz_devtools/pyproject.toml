@@ -1,0 +1,14 @@
+[project]
+name = "ahaz_devtools"
+version = "0.0.1"
+description = "Command-line development tools for Ahaz"
+dependencies = [
+]
+
+[tool.uv.sources]
+ahaz_common = { workspace = true }
+
+[project.scripts]
+create_cluster = "ahaz_devtools.main:init_cluster"
+delete_cluster = "ahaz_devtools.main:delete_cluster"
+
