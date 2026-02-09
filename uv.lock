@@ -51,7 +51,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.12.3" }]
 [[package]]
 name = "ahaz-devtools"
 version = "0.0.1"
-source = { virtual = "ahaz_devtools" }
+source = { editable = "ahaz_devtools" }
 
 [[package]]
 name = "ahaz-k8s-controller"
