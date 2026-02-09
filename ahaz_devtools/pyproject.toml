@@ -2,7 +2,11 @@
 name = "ahaz_devtools"
 version = "0.0.1"
 description = "Command-line development tools for Ahaz"
-dependencies = []
+dependencies = [
+    "docker>=7.1.0",
+    "rich>=14.2.0",
+    "watchdog>=6.0.0",
+]
 
 [tool.uv.sources]
 ahaz_common = { workspace = true }
@@ -10,6 +14,8 @@ ahaz_common = { workspace = true }
 [project.scripts]
 create-cluster = "ahaz_devtools.main:init_cluster"
 delete-cluster = "ahaz_devtools.main:delete_cluster"
+watch = "ahaz_devtools.main:watch"
+build = "ahaz_devtools.main:build"
 
 [build-system]
 requires = ["hatchling"]

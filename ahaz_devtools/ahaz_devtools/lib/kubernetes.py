@@ -2,6 +2,7 @@ import logging
 import subprocess
 
 from .config import REGISTRY_DIR, REGISTRY_NAME, REGISTRY_PORT
+from .subprocess import execute_into_logger
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,9 @@ def is_helm_installed():
 
 def create_kind_cluster():
     try:
-        subprocess.run(
+        logger.info("Creating kind cluster 'ahaz-dev'...")
+        # Run kind create cluster and stream its output to the logger as it runs
+        execute_into_logger(
             [
                 "kind",
                 "create",
@@ -55,7 +58,7 @@ def create_kind_cluster():
                     / 'kind-config.yml'
                 }",
             ],
-            check=True,
+            logger,
         )
         logger.info("Kind cluster 'ahaz-dev' created successfully.")
     except subprocess.CalledProcessError as e:
@@ -65,7 +68,8 @@ def create_kind_cluster():
 
 def delete_kind_cluster():
     try:
-        subprocess.run(["kind", "delete", "cluster", "--name", "ahaz-dev"], check=True)
+        logger.info("Deleting kind cluster 'ahaz-dev'...")
+        execute_into_logger(["kind", "delete", "cluster", "--name", "ahaz-dev"], logger)
         logger.info("Kind cluster 'ahaz-dev' deleted successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to delete kind cluster: {e}")
@@ -74,6 +78,7 @@ def delete_kind_cluster():
 
 def setup_local_registry_in_kind(cluster_name="ahaz-dev"):
     try:
+        logger.info(f"Setting up local registry in kind cluster '{cluster_name}'...")
         # Get kind nodes
         result = subprocess.run(
             ["kind", "get", "nodes", "--name", cluster_name],
@@ -90,9 +95,9 @@ def setup_local_registry_in_kind(cluster_name="ahaz-dev"):
             logger.info(f"Configuring local registry for kind node: {node}")
 
             # Create registry config directory inside node
-            subprocess.run(
+            execute_into_logger(
                 ["docker", "exec", node, "mkdir", "-p", certs_dir],
-                check=True,
+                logger,
             )
 
             # Proper containerd hosts.toml format
@@ -104,17 +109,14 @@ server = "http://{registry_host}"
   skip_verify = true
 """
 
-            subprocess.run(
+            execute_into_logger(
                 ["docker", "exec", "-i", node, "cp", "/dev/stdin", f"{certs_dir}/hosts.toml"],
-                input=registry_config.encode(),
-                check=True,
+                logger,
+                input=registry_config,
             )
 
         # Connect registry container to kind network (ignore if already connected)
-        subprocess.run(
-            ["docker", "network", "connect", "kind", REGISTRY_NAME],
-            check=False,
-        )
+        execute_into_logger(["docker", "network", "connect", "kind", REGISTRY_NAME], logger)
 
         logger.info("Local registry successfully configured for kind cluster.")
 
@@ -125,9 +127,10 @@ server = "http://{registry_host}"
 
 def install_cilium():
     try:
-        subprocess.run(["helm", "repo", "add", "cilium", "https://helm.cilium.io/"], check=True)
+        logger.info("Installing Cilium CNI...")
+        execute_into_logger(["helm", "repo", "add", "cilium", "https://helm.cilium.io/"], logger)
 
-        subprocess.run(
+        execute_into_logger(
             [
                 "helm",
                 "install",
@@ -144,9 +147,9 @@ def install_cilium():
                 "--set",
                 "ipam.mode=kubernetes",
             ],
-            check=True,
+            logger,
         )
-        subprocess.run(["kubectl", "rollout", "status", "ds/cilium", "-n", "kube-system"], check=True)
+        execute_into_logger(["kubectl", "rollout", "status", "ds/cilium", "-n", "kube-system"], logger)
         logger.info("Cilium installed successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Cilium: {e}")
@@ -155,7 +158,8 @@ def install_cilium():
 
 def install_kyverno():
     try:
-        subprocess.run(
+        logger.info("Installing Kyverno...")
+        execute_into_logger(
             [
                 "helm",
                 "repo",
@@ -163,9 +167,9 @@ def install_kyverno():
                 "kyverno",
                 "https://kyverno.github.io/kyverno/",
             ],
-            check=True,
+            logger,
         )
-        subprocess.run(
+        execute_into_logger(
             [
                 "helm",
                 "install",
@@ -175,11 +179,11 @@ def install_kyverno():
                 "kyverno",
                 "--create-namespace",
             ],
-            check=True,
+            logger,
         )
-        subprocess.run(
+        execute_into_logger(
             ["kubectl", "rollout", "status", "deploy/kyverno-admission-controller", "-n", "kyverno"],
-            check=True,
+            logger,
         )
         logger.info("Kyverno installed successfully.")
     except subprocess.CalledProcessError as e:
@@ -189,7 +193,8 @@ def install_kyverno():
 
 def install_ahaz():
     try:
-        subprocess.run(
+        logger.info("Installing Ahaz...")
+        execute_into_logger(
             [
                 "helm",
                 "install",
@@ -209,10 +214,50 @@ def install_ahaz():
                 "--set",
                 f"kubernetes.k8sApiServiceCidr={get_k8s_api_ip()}/32",
             ],
-            check=True,
+            logger,
         )
-        subprocess.run(["kubectl", "rollout", "status", "deploy/ahaz", "-n", "ahaz"], check=True)
+        execute_into_logger(["kubectl", "rollout", "status", "deploy/ahaz", "-n", "ahaz"], logger)
         logger.info("Ahaz installed successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Ahaz: {e}")
+        raise
+
+
+def is_ahaz_forwarded():
+    try:
+        result = subprocess.run(
+            ["kubectl", "get", "svc/ahaz", "-n", "ahaz", "-o", "jsonpath={.spec.ports[0].nodePort}"],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        node_port = result.stdout.strip()
+        return node_port == "8080"
+    except subprocess.CalledProcessError:
+        return False
+
+
+def forward_ahaz_port():
+    if is_ahaz_forwarded():
+        logger.info("Ahaz API is already forwarded to localhost:8080")
+        return
+
+    try:
+        execute_into_logger(
+            ["kubectl", "port-forward", "svc/ahaz", "8080:5000", "-n", "ahaz"],
+            logger,
+        )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to forward Ahaz API: {e}")
+        raise
+
+
+def restart_ahaz():
+    try:
+        logger.info("Restarting Ahaz deployment...")
+        execute_into_logger(["kubectl", "rollout", "restart", "deploy/ahaz", "-n", "ahaz"], logger)
+        execute_into_logger(["kubectl", "rollout", "status", "deploy/ahaz", "-n", "ahaz"], logger)
+        logger.info("Ahaz restarted successfully!")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to restart Ahaz: {e}")
         raise
