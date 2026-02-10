@@ -13,16 +13,12 @@ RUN apk add --no-cache curl && \
 
 
 # Get EasyRSA
-RUN set -eux; \
-  EASYRSA_TAG="v3.1.0"; \
-  EASYRSA_NAME="EasyRSA-${EASYRSA_TAG#v}.tgz"; \
-  URL="https://github.com/OpenVPN/easy-rsa/releases/download/${EASYRSA_TAG}/${EASYRSA_NAME}"; \
-  mkdir -p /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v}; \
-  curl -fsSL "$URL" -o /tmp/$EASYRSA_NAME; \
-  tar -xzf /tmp/$EASYRSA_NAME -C /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v} --strip-components=1; \
-  rm /tmp/$EASYRSA_NAME; \
-  ln -sf /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_TAG#v}/easyrsa /usr/local/bin/easyrsa; \
-  chmod +x /usr/local/bin/easyrsa
+ENV EASYRSA_VERSION=3.1.0
+ENV EASYRSA_NAME=EasyRSA-${EASYRSA_VERSION}.tgz
+ENV EASYRSA_URL=https://github.com/OpenVPN/easy-rsa/releases/download/v${EASYRSA_VERSION}/${EASYRSA_NAME}
+ADD --unpack=true ${EASYRSA_URL} /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_VERSION}
+RUN ln -sf /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_VERSION}/easyrsa /usr/local/bin/easyrsa
+RUN chmod +x /usr/local/bin/easyrsa
 
 # Install Python and OpenVPN
 RUN apk add --no-cache \
