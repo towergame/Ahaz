@@ -8,7 +8,12 @@ import rich.logging
 import watchdog.events
 import watchdog.observers
 
-from .lib.docker import build_and_push_ahaz_image, create_local_registry, delete_local_registry
+from .lib.docker import (
+    build_and_push_ahaz_image,
+    create_local_registry,
+    delete_local_registry,
+    docker_is_available,
+)
 from .lib.kubernetes import (
     create_kind_cluster,
     delete_kind_cluster,
@@ -36,6 +41,10 @@ def init_cluster():
         logger.error("Helm is not installed. Please install Helm to proceed.")
         sys.exit(1)
 
+    if not docker_is_available():
+        logger.error("Docker is not available. Please ensure Docker is running and accessible to proceed.")
+        sys.exit(1)
+
     create_kind_cluster()
 
     create_local_registry()
@@ -58,6 +67,10 @@ def delete_cluster():
 
 
 def build(forward=True):
+    if not docker_is_available():
+        logger.error("Docker is not available. Please ensure Docker is running and accessible to proceed.")
+        sys.exit(1)
+
     build_and_push_ahaz_image()
     restart_ahaz()
     if forward:
@@ -73,6 +86,10 @@ def watch_forward():
 
 # Watches root directory for changes and rebuilds and redeploys Ahaz on change
 def watch():
+    if not docker_is_available():
+        logger.error("Docker is not available. Please ensure Docker is running and accessible to proceed.")
+        sys.exit(1)
+
     root = __import__("pathlib").Path(__file__).resolve().parent.parent.parent
     logger.info("Building and deploying Ahaz to cluster...")
     build(forward=False)

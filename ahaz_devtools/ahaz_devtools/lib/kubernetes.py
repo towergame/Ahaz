@@ -1,5 +1,5 @@
-import json
 import logging
+import shutil
 import subprocess
 from datetime import datetime
 from time import sleep
@@ -124,19 +124,11 @@ def restart_deployment(namespace: str, name: str):
 
 
 def is_kind_installed():
-    try:
-        subprocess.run(["kind", "version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    return shutil.which("kind") is not None
 
 
 def is_helm_installed():
-    try:
-        subprocess.run(["helm", "version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    return shutil.which("helm") is not None
 
 
 def create_kind_cluster():

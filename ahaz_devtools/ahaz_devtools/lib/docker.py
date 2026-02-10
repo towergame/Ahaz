@@ -1,4 +1,5 @@
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,16 @@ from ahaz_devtools.lib.subprocess import execute_into_logger
 from .config import REGISTRY_NAME, REGISTRY_PORT
 
 logger = logging.getLogger(__name__)
+
+
+def docker_is_available():
+    try:
+        client = docker.from_env()
+        client.ping()
+        return shutil.which("docker") is not None
+    except Exception as e:
+        logger.error(f"Docker is not available: {e}")
+        return False
 
 
 def create_local_registry():
@@ -38,6 +49,9 @@ def build_and_push_ahaz_image():
 
     dockerfile_path = Path(__file__).resolve().parent.parent.parent.parent / "Dockerfile.controller"
 
+    # HACK: the Docker library doesn't do buildkit
+    # not doing buildkit for some unfathomable reason breaks Ahaz
+    # I love Docker <3
     execute_into_logger(
         [
             "docker",
