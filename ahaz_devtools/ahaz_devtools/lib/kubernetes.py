@@ -1,27 +1,126 @@
+import json
 import logging
 import subprocess
+from datetime import datetime
+from time import sleep
 
-from .config import REGISTRY_DIR, REGISTRY_NAME, REGISTRY_PORT
+import rich.progress
+from kubernetes import client, config
+
+from .config import REGISTRY_NAME
 from .subprocess import execute_into_logger
 
 logger = logging.getLogger(__name__)
 
 
+def load_kube_config():
+    try:
+        config.load_kube_config()
+        logger.debug("Kubeconfig loaded successfully.")
+    except Exception as e:
+        logger.error(f"Failed to load kubeconfig: {e}")
+        raise
+
+
 def get_k8s_api_ip():
     # Get IP address of the controller node
-    result = subprocess.run(
-        [
-            "kubectl",
-            "get",
-            "nodes",
-            "-o",
-            "jsonpath={.items[0].status.addresses[?(@.type=='InternalIP')].address}",
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-    )
-    controller_ip = result.stdout.decode().strip()
+    load_kube_config()
+    k8s = client.CoreV1Api()
+    nodes = k8s.list_node()
+    if not nodes.items:
+        raise RuntimeError("No nodes found in the cluster")
+
+    controller_ip = nodes.items[0].status.addresses[0].address
+
     return controller_ip
+
+
+def track_daemonset_rollout(namespace: str, name: str):
+    load_kube_config()
+    k8s = client.AppsV1Api()
+
+    with rich.progress.Progress() as progress:
+        task = progress.add_task(f"Waiting for DaemonSet {name} to be ready...", total=None)
+
+        while True:
+            ds = k8s.read_namespaced_daemon_set(name, namespace)
+
+            if not isinstance(ds, client.V1DaemonSet) or ds.status is None:
+                logger.warning(f"DaemonSet {name} status is not available yet. Retrying...")
+                continue
+
+            if (
+                ds.status.number_ready is not None
+                and ds.status.desired_number_scheduled > 0
+                and ds.status.number_ready == ds.status.desired_number_scheduled
+            ):
+                break
+
+            progress.update(
+                task,
+                description=(
+                    f"DaemonSet {name} ready: "
+                    f"{ds.status.number_ready or 0}/{ds.status.desired_number_scheduled}"
+                ),
+            )
+        progress.update(task, description=f"DaemonSet {name} is ready!")
+
+
+def track_deployment_rollout(namespace: str, name: str, target_gen: int | None = None):
+    load_kube_config()
+    k8s = client.AppsV1Api()
+
+    with rich.progress.Progress() as progress:
+        task = progress.add_task(f"Waiting for Deployment {name} to be ready...", total=None)
+
+        while True:
+            deploy: client.V1Deployment = k8s.read_namespaced_deployment_status(name, namespace)  # pyright: ignore[reportAssignmentType]
+
+            if not isinstance(deploy.status, client.V1DeploymentStatus):
+                logger.warning(f"Deployment {name} status is not available yet. Retrying...")
+                continue
+
+            if deploy.status.observed_generation is None or deploy.status.observed_generation < target_gen:
+                logger.debug(f"Deployment {name} status is not up to date yet. Retrying...")
+                continue
+
+            if (
+                deploy.status.ready_replicas is not None
+                and deploy.status.ready_replicas == deploy.status.replicas
+                and deploy.status.terminating_replicas == 0
+            ):
+                break
+
+            progress.update(
+                task,
+                description=(
+                    f"Deployment {name} ready: {deploy.status.ready_replicas or 0}/{deploy.status.replicas}"
+                ),
+            )
+        progress.update(task, description=f"Deployment {name} is ready!")
+
+
+def restart_deployment(namespace: str, name: str):
+    load_kube_config()
+    k8s = client.AppsV1Api()
+    result = k8s.patch_namespaced_deployment(
+        name,
+        namespace,
+        {
+            "spec": {
+                "template": {
+                    "metadata": {
+                        "annotations": {"kubectl.kubernetes.io/restartedAt": datetime.now().isoformat()}
+                    }
+                }
+            }
+        },
+    )
+
+    if isinstance(result, client.V1Deployment) and result.metadata and result.metadata.generation:
+        return result.metadata.generation
+
+    return None
 
 
 def is_kind_installed():
@@ -149,7 +248,9 @@ def install_cilium():
             ],
             logger,
         )
-        execute_into_logger(["kubectl", "rollout", "status", "ds/cilium", "-n", "kube-system"], logger)
+
+        track_daemonset_rollout("kube-system", "cilium")
+
         logger.info("Cilium installed successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Cilium: {e}")
@@ -181,10 +282,9 @@ def install_kyverno():
             ],
             logger,
         )
-        execute_into_logger(
-            ["kubectl", "rollout", "status", "deploy/kyverno-admission-controller", "-n", "kyverno"],
-            logger,
-        )
+
+        track_deployment_rollout("kyverno", "kyverno-admission-controller")
+
         logger.info("Kyverno installed successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Kyverno: {e}")
@@ -216,33 +316,18 @@ def install_ahaz():
             ],
             logger,
         )
-        execute_into_logger(["kubectl", "rollout", "status", "deploy/ahaz", "-n", "ahaz"], logger)
+
+        track_deployment_rollout("ahaz", "ahaz")
+
         logger.info("Ahaz installed successfully.")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to install Ahaz: {e}")
         raise
 
 
-def is_ahaz_forwarded():
-    try:
-        result = subprocess.run(
-            ["kubectl", "get", "svc/ahaz", "-n", "ahaz", "-o", "jsonpath={.spec.ports[0].nodePort}"],
-            check=True,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        node_port = result.stdout.strip()
-        return node_port == "8080"
-    except subprocess.CalledProcessError:
-        return False
-
-
 def forward_ahaz_port():
-    if is_ahaz_forwarded():
-        logger.info("Ahaz API is already forwarded to localhost:8080")
-        return
-
     try:
+        # HACK: Python Kubernetes client's portforwarding functionality is dogshit awful, so this stays.
         execute_into_logger(
             ["kubectl", "port-forward", "svc/ahaz", "8080:5000", "-n", "ahaz"],
             logger,
@@ -255,8 +340,11 @@ def forward_ahaz_port():
 def restart_ahaz():
     try:
         logger.info("Restarting Ahaz deployment...")
-        execute_into_logger(["kubectl", "rollout", "restart", "deploy/ahaz", "-n", "ahaz"], logger)
-        execute_into_logger(["kubectl", "rollout", "status", "deploy/ahaz", "-n", "ahaz"], logger)
+        target_gen = restart_deployment("ahaz", "ahaz")
+        # HACK: I genuinely have no idea how better to give k8s time to *start* updating the deployment
+        sleep(0.2)
+        track_deployment_rollout("ahaz", "ahaz", target_gen=target_gen)
+
         logger.info("Ahaz restarted successfully!")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to restart Ahaz: {e}")
