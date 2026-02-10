@@ -2,6 +2,7 @@ import logging
 import shutil
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from time import sleep
 
 import rich.progress
@@ -143,11 +144,7 @@ def create_kind_cluster():
                 "--name",
                 "ahaz-dev",
                 "--config",
-                f"{
-                    __import__('pathlib').Path(__file__).resolve().parent.parent
-                    / 'assets'
-                    / 'kind-config.yml'
-                }",
+                f"{Path(__file__).resolve().parent.parent / 'assets' / 'kind-config.yml'}",
             ],
             logger,
         )
@@ -296,11 +293,7 @@ def install_ahaz():
                 "ahaz",
                 "--create-namespace",
                 "--values",
-                f"{
-                    __import__('pathlib').Path(__file__).resolve().parent.parent
-                    / 'assets'
-                    / 'ahaz-values.yml'
-                }",
+                f"{Path(__file__).resolve().parent.parent / 'assets' / 'ahaz-values.yml'}",
                 "--set",
                 f"controller.image.repository={REGISTRY_NAME}:5000/ahaz",
                 "--set",
