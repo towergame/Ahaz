@@ -13,10 +13,11 @@ RUN apk add --no-cache curl && \
 
 
 # Get EasyRSA
-ENV EASYRSA_VERSION=3.1.0
-ENV EASYRSA_NAME=EasyRSA-${EASYRSA_VERSION}.tgz
-ENV EASYRSA_URL=https://github.com/OpenVPN/easy-rsa/releases/download/v${EASYRSA_VERSION}/${EASYRSA_NAME}
-ADD --unpack=true ${EASYRSA_URL} /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_VERSION}
+ARG EASYRSA_VERSION=3.1.0
+ARG EASYRSA_NAME=EasyRSA-${EASYRSA_VERSION}.tgz
+ARG EASYRSA_URL=https://github.com/OpenVPN/easy-rsa/releases/download/v${EASYRSA_VERSION}/${EASYRSA_NAME}
+
+ADD --unpack=true ${EASYRSA_URL} /app/ahaz_k8s_controller/k8s_controller/tools/
 RUN ln -sf /app/ahaz_k8s_controller/k8s_controller/tools/EasyRSA-${EASYRSA_VERSION}/easyrsa /usr/local/bin/easyrsa
 RUN chmod +x /usr/local/bin/easyrsa
 
