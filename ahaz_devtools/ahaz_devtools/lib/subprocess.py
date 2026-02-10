@@ -1,10 +1,9 @@
-import logging
 import subprocess
+from logging import DEBUG, Logger
+from typing import Optional
 
 
-def execute_into_logger(
-    command: list[str], logger: logging.Logger, log_level=logging.DEBUG, input: str | None = None
-):
+def execute_into_logger(command: list[str], logger: Logger, log_level=DEBUG, input: Optional[str] = None):
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
