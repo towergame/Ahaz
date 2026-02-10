@@ -1,8 +1,9 @@
 import logging
 import os
+import signal
 import sys
 import threading
-import time
+from pathlib import Path
 
 import rich.logging
 import watchdog.events
@@ -90,7 +91,7 @@ def watch():
         logger.error("Docker is not available. Please ensure Docker is running and accessible to proceed.")
         sys.exit(1)
 
-    root = __import__("pathlib").Path(__file__).resolve().parent.parent.parent
+    root = Path(__file__).resolve().parent.parent.parent  # Get project root
     logger.info("Building and deploying Ahaz to cluster...")
     build(forward=False)
     logger.info(f"Watching {root} for changes to Ahaz source code...")
@@ -114,8 +115,7 @@ def watch():
     observer.schedule(event_handler, str(root), recursive=True)
     observer.start()
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
+        signal.pause()  # Keep the main thread alive
+    except (KeyboardInterrupt, SystemExit):
         observer.stop()
     observer.join()
