@@ -17,6 +17,7 @@ def create_local_registry():
         image="registry:2",
         name=REGISTRY_NAME,
         detach=True,
+        restart_policy={"Name": "always"},
         ports={"5000/tcp": ("127.0.0.1", REGISTRY_PORT)},
     )
     while run_logs.status != "running":
