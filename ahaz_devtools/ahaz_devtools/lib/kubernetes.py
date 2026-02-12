@@ -322,6 +322,8 @@ def forward_ahaz_port():
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to forward Ahaz API: {e}")
         raise
+    except KeyboardInterrupt:
+        logger.info("Port forwarding stopped by user.")
 
 
 def restart_ahaz():
