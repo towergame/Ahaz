@@ -103,9 +103,16 @@ def watch():
         def on_modified(self, event):
             if event.is_directory:
                 return
-            path = os.fspath(event.src_path)
-            if isinstance(path, (bytes, bytearray)):
-                path = path.decode(errors="ignore")
+
+            rawPath: bytes | str = os.fspath(event.src_path)
+
+            # ensure rawPath is a string, decoding if necessary
+            if isinstance(rawPath, (bytes, bytearray)):
+                path: str = rawPath.decode(errors="ignore")
+            else:
+                assert isinstance(rawPath, str), "Expected rawPath to be a string after os.fspath"
+                path: str = rawPath
+
             if path.endswith((".py", ".yaml", ".yml")) or "Dockerfile" in path.split(os.sep)[-1]:
                 logger.info(f"Change detected in {event.src_path}, rebuilding and redeploying Ahaz...")
                 build(forward=False)
@@ -118,4 +125,11 @@ def watch():
         signal.pause()  # Keep the main thread alive
     except (KeyboardInterrupt, SystemExit):
         observer.stop()
-    observer.join()
+
+    try:
+        observer.join()
+    except KeyboardInterrupt:
+        # NOP, just suppress the exception on Ctrl+C during shutdown
+        pass
+
+    logger.info("Bye-bye!")
