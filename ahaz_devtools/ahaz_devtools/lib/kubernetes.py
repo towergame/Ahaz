@@ -81,7 +81,9 @@ def track_deployment_rollout(namespace: str, name: str, target_gen: int | None =
                 logger.warning(f"Deployment {name} status is not available yet. Retrying...")
                 continue
 
-            if deploy.status.observed_generation is None or deploy.status.observed_generation < target_gen:
+            if deploy.status.observed_generation is None or (
+                target_gen is not None and deploy.status.observed_generation < target_gen
+            ):
                 logger.debug(f"Deployment {name} status is not up to date yet. Retrying...")
                 continue
 
