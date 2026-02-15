@@ -121,15 +121,26 @@ def watch():
     observer = watchdog.observers.Observer()
     observer.schedule(event_handler, str(root), recursive=True)
     observer.start()
-    try:
-        signal.pause()  # Keep the main thread alive
-    except (KeyboardInterrupt, SystemExit):
-        observer.stop()
 
-    try:
-        observer.join()
-    except KeyboardInterrupt:
-        # NOP, just suppress the exception on Ctrl+C during shutdown
-        pass
+    signal.sigwait([signal.SIGINT, signal.SIGTERM])  # Keep the main thread alive
+
+    logger.info("Shutting down...")
+
+    observer.stop()
+
+    exit_counter = 0
+
+    THRESHOLD = 3
+    while exit_counter < THRESHOLD:
+        try:
+            observer.join()
+        except KeyboardInterrupt:
+            exit_counter += 1
+            if exit_counter < THRESHOLD:
+                logger.info(
+                    f"Received exit signal ({exit_counter}/{THRESHOLD})."
+                    f" Press Ctrl+C {THRESHOLD - exit_counter} more times to force exit."
+                )
+            pass
 
     logger.info("Bye-bye!")
