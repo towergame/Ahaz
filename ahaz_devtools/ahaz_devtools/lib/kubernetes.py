@@ -90,7 +90,7 @@ def track_deployment_rollout(namespace: str, name: str, target_gen: int | None =
             if (
                 deploy.status.ready_replicas is not None
                 and deploy.status.ready_replicas == deploy.status.replicas
-                and deploy.status.terminating_replicas == 0
+                and (deploy.status.terminating_replicas == 0 or deploy.status.terminating_replicas is None)
             ):
                 break
 
