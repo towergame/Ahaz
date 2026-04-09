@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import docker
+import docker.errors
 from ahaz_devtools.lib.subprocess import execute_into_logger
 
 from .config import REGISTRY_NAME, REGISTRY_PORT
@@ -21,8 +22,28 @@ def docker_is_available():
         return False
 
 
+def docker_check_registry():
+    logger.info("Checking for local Docker registry...")
+    client = docker.from_env()
+    try:
+        if client.containers.get(REGISTRY_NAME):
+            logger.debug("Local Docker registry is running.")
+            return True
+    except docker.errors.NotFound:
+        logger.debug("Local Docker registry not found.")
+        return False
+    except Exception as e:
+        logger.error(f"Error checking for local Docker registry: {e}")
+        return False
+
+
 def create_local_registry():
     logger.info("Creating local Docker registry...")
+
+    if docker_check_registry():
+        logger.info("Local Docker registry already exists. Skipping creation.")
+        return
+
     client = docker.from_env()
     run_logs = client.containers.run(
         image="registry:2",
@@ -39,6 +60,11 @@ def create_local_registry():
 
 def delete_local_registry():
     logger.info("Deleting local Docker registry...")
+
+    if not docker_check_registry():
+        logger.info("No local Docker registry found. Skipping deletion.")
+        return
+
     client = docker.from_env()
     client.containers.get(REGISTRY_NAME).remove(force=True)
     logger.info("Local Docker registry deleted successfully.")

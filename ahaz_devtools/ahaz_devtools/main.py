@@ -107,11 +107,12 @@ def watch():
             rawPath: bytes | str = os.fspath(event.src_path)
 
             # ensure rawPath is a string, decoding if necessary
+            path: str = ""
             if isinstance(rawPath, (bytes, bytearray)):
-                path: str = rawPath.decode(errors="ignore")
+                path = rawPath.decode(errors="ignore")
             else:
                 assert isinstance(rawPath, str), "Expected rawPath to be a string after os.fspath"
-                path: str = rawPath
+                path = rawPath
 
             if path.endswith((".py", ".yaml", ".yml")) or "Dockerfile" in path.split(os.sep)[-1]:
                 logger.info(f"Change detected in {event.src_path}, rebuilding and redeploying Ahaz...")
